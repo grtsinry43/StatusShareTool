@@ -1,0 +1,11 @@
+[package]
+name = "linux-gtk"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+glib = "0.20"
+gtk = { package = "gtk4", version = "0.9" }
+serde.workspace = true
+serde_json.workspace = true
+statusshare-core = { path = "../../crates/statusshare-core" }

@@ -1,0 +1,19 @@
+name: StatusShareMac
+options:
+  bundleIdPrefix: dev.grtsinry43
+settings:
+  base:
+    SWIFT_VERSION: 6.0
+targets:
+  StatusShareMac:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - StatusShareMac
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.grtsinry43.StatusShareMac
+        PRODUCT_NAME: StatusShareMac
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
+
