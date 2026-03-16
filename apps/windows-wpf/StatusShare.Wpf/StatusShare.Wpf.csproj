@@ -5,6 +5,11 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <StatusShareRepoRoot>$(MSBuildThisFileDirectory)..\..\..</StatusShareRepoRoot>
+    <RustProfile Condition="'$(Configuration)' == 'Release'">release</RustProfile>
+    <RustProfile Condition="'$(RustProfile)' == ''">debug</RustProfile>
+    <CargoReleaseArg Condition="'$(Configuration)' == 'Release'">--release</CargoReleaseArg>
+    <RustNativeLibraryPath>$(StatusShareRepoRoot)target\$(RustProfile)\windows_pinvoke.dll</RustNativeLibraryPath>
   </PropertyGroup>
 
   <ItemGroup>
@@ -12,10 +17,19 @@
     <PackageReference Include="Wpf.Ui" Version="4.0.2" />
   </ItemGroup>
   
-  <ItemGroup>
-    <None Update="runtimes\\win-x64\\native\\windows_pinvoke.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
-</Project>
+  <Target Name="BuildRustNative"
+          BeforeTargets="BeforeBuild"
+          Condition="'$(DesignTimeBuild)' != 'true' and '$(OS)' == 'Windows_NT'">
+    <Exec Command="cargo build -p windows-pinvoke $(CargoReleaseArg)"
+          WorkingDirectory="$(StatusShareRepoRoot)" />
+  </Target>
 
+  <Target Name="CopyRustNative"
+          AfterTargets="Build"
+          DependsOnTargets="BuildRustNative"
+          Condition="'$(DesignTimeBuild)' != 'true' and '$(OS)' == 'Windows_NT' and Exists('$(RustNativeLibraryPath)')">
+    <Copy SourceFiles="$(RustNativeLibraryPath)"
+          DestinationFolder="$(OutDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+</Project>
