@@ -1,7 +1,7 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net9.0-windows</TargetFramework>
+    <TargetFramework>net8.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
@@ -9,27 +9,25 @@
     <RustProfile Condition="'$(Configuration)' == 'Release'">release</RustProfile>
     <RustProfile Condition="'$(RustProfile)' == ''">debug</RustProfile>
     <CargoReleaseArg Condition="'$(Configuration)' == 'Release'">--release</CargoReleaseArg>
-    <RustNativeLibraryPath>$(StatusShareRepoRoot)target\$(RustProfile)\windows_pinvoke.dll</RustNativeLibraryPath>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
-    <PackageReference Include="Wpf.Ui" Version="4.0.2" />
+    <PackageReference Include="WPF-UI" Version="4.2.0" />
   </ItemGroup>
-  
-  <Target Name="BuildRustNative"
-          BeforeTargets="BeforeBuild"
-          Condition="'$(DesignTimeBuild)' != 'true' and '$(OS)' == 'Windows_NT'">
-    <Exec Command="cargo build -p windows-pinvoke $(CargoReleaseArg)"
-          WorkingDirectory="$(StatusShareRepoRoot)" />
-  </Target>
 
-  <Target Name="CopyRustNative"
-          AfterTargets="Build"
-          DependsOnTargets="BuildRustNative"
-          Condition="'$(DesignTimeBuild)' != 'true' and '$(OS)' == 'Windows_NT' and Exists('$(RustNativeLibraryPath)')">
-    <Copy SourceFiles="$(RustNativeLibraryPath)"
-          DestinationFolder="$(OutDir)"
-          SkipUnchangedFiles="true" />
+  <ItemGroup>
+    <None Include="..\..\..\target\release\windows_pinvoke.dll"
+          CopyToOutputDirectory="PreserveNewest"
+          Link="windows_pinvoke.dll"
+          Condition="Exists('..\..\..\target\release\windows_pinvoke.dll')" />
+    <None Include="..\..\..\target\debug\windows_pinvoke.dll"
+          CopyToOutputDirectory="PreserveNewest"
+          Link="windows_pinvoke.dll"
+          Condition="!Exists('..\..\..\target\release\windows_pinvoke.dll')" />
+  </ItemGroup>
+
+  <Target Name="BuildRustNative" BeforeTargets="BeforeBuild" Condition="'$(DesignTimeBuild)' != 'true' and '$(OS)' == 'Windows_NT'">
+    <Exec Command="cargo build -p windows-pinvoke $(CargoReleaseArg)" WorkingDirectory="$(StatusShareRepoRoot)" />
   </Target>
 </Project>

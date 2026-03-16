@@ -1,6 +1,6 @@
-mod scheduler;
+﻿mod scheduler;
 
-pub use scheduler::{PushScheduler, ReportReason, ScheduleDecision};
+pub use scheduler::{PushScheduler, ReportReason, ScheduleDecision, SchedulerPlanResult, SchedulerSnapshot, mark_status_pushed, plan_status_update};
 
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex};
@@ -124,108 +124,23 @@ impl Default for PersistedConfig {
 
 fn default_match_rules() -> Vec<WindowMatchRule> {
     vec![
-        rule(
-            "chrome",
-            "chrome",
-            "Chrome",
-            "Lighthouse跑分专用浏览器，只要关掉插件，我的网站就天下第一",
-        ),
-        rule(
-            "firefox",
-            "firefox",
-            "Firefox",
-            "CSS调试唯一指定亲爹，但产品经理的电脑上没有它",
-        ),
-        rule(
-            "kitty",
-            "kitty",
-            "Kitty",
-            "美化半天，结果99%的时间都在看 `pnpm install` 的进度条",
-        ),
-        rule(
-            "konsole",
-            "konsole",
-            "Konsole",
-            "说不定在 yay -Syyu ，没准一会儿就 grub > 了",
-        ),
-        rule(
-            "code",
-            "code",
-            "VS Code",
-            "ESLint和Prettier天天在我的配置文件里打架",
-        ),
-        rule(
-            "idea",
-            "idea",
-            "IntelliJ IDEA",
-            "要么享受着kt的爽，要么就是面向Spring开发中",
-        ),
-        rule(
-            "clion",
-            "clion",
-            "CLion",
-            "不会有人不喜欢C++吧？ 唉依赖，也是念起CMake vcpkg conan的好了",
-        ),
-        rule(
-            "goland",
-            "goland",
-            "GoLand",
-            "新潮后端们的圣杯，据说能用interface{}写出JavaScript的感觉",
-        ),
-        rule(
-            "pycharm",
-            "pycharm",
-            "PyCharm",
-            "后端同事的快乐老家，据说那里的缩进能决定项目死活",
-        ),
-        rule(
-            "webstorm",
-            "webstorm",
-            "WebStorm",
-            "自动导入一时爽，索引项目火葬场，专治各种 'any' 写法",
-        ),
-        rule(
-            "discord",
-            "discord",
-            "Discord",
-            "React/Vue/Svelte 官方指定撕逼广场",
-        ),
-        rule(
-            "telegram",
-            "telegram",
-            "Telegram",
-            "Vite作者的日常茶馆，前端前沿资讯的第一手信源",
-        ),
-        rule(
-            "wechat",
-            "wechat",
-            "WeChat",
-            "前端兼容性噩梦的始作俑者，梦回IE6",
-        ),
-        rule(
-            "spotify",
-            "spotify",
-            "Spotify",
-            "专注码字BGM生成器，一首歌的时间刚好够我命名一个CSS class",
-        ),
-        rule(
-            "typora",
-            "typora",
-            "Typora",
-            "写README.md的唯一动力，毕竟它排版比我写的UI好看多了",
-        ),
-        rule(
-            "obs",
-            "obs",
-            "OBS",
-            "录制 Bug 复现视频专用，顺便幻想自己是 live-coding 大神",
-        ),
-        rule(
-            "reqable",
-            "reqable",
-            "Reqable",
-            "API 不好用了吧...可能正在倍受折磨",
-        ),
+        rule("chrome", "chrome", "Chrome", "Lighthouse跑分专用浏览器，只要关掉插件，我的网站就天下第一"),
+        rule("firefox", "firefox", "Firefox", "CSS调试唯一指定亲爹，但产品经理的电脑上没有它"),
+        rule("kitty", "kitty", "Kitty", "美化半天，结果99%的时间都在看 `pnpm install` 的进度条"),
+        rule("konsole", "konsole", "Konsole", "说不定在 yay -Syyu ，没准一会儿就 grub > 了"),
+        rule("code", "code", "VS Code", "ESLint和Prettier天天在我的配置文件里打架"),
+        rule("idea", "idea", "IntelliJ IDEA", "要么享受着kt的爽，要么就是面向Spring开发中"),
+        rule("clion", "clion", "CLion", "不会有人不喜欢C++吧？ 唉依赖，也是念起CMake vcpkg conan的好了"),
+        rule("goland", "goland", "GoLand", "新潮后端们的圣杯，据说能用interface{}写出JavaScript的感觉"),
+        rule("pycharm", "pycharm", "PyCharm", "后端同事的快乐老家，据说那里的缩进能决定项目死活"),
+        rule("webstorm", "webstorm", "WebStorm", "自动导入一时爽，索引项目火葬场，专治各种 'any' 写法"),
+        rule("discord", "discord", "Discord", "React/Vue/Svelte 官方指定撕逼广场"),
+        rule("telegram", "telegram", "Telegram", "Vite作者的日常茶馆，前端前沿资讯的第一手信源"),
+        rule("wechat", "wechat", "WeChat", "前端兼容性噩梦的始作俑者，梦回IE6"),
+        rule("spotify", "spotify", "Spotify", "专注码字BGM生成器，一首歌的时间刚好够我命名一个CSS class"),
+        rule("typora", "typora", "Typora", "写README.md的唯一动力，毕竟它排版比我写的UI好看多了"),
+        rule("obs", "obs", "OBS", "录制 Bug 复现视频专用，顺便幻想自己是 live-coding 大神"),
+        rule("reqable", "reqable", "Reqable", "API 不好用了吧...可能正在倍受折磨"),
     ]
 }
 
@@ -1045,3 +960,6 @@ mod tests {
         assert!(result.update.is_none());
     }
 }
+
+
+

@@ -1,4 +1,4 @@
-use std::sync::Mutex;
+﻿use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
@@ -18,6 +18,19 @@ pub struct ScheduleDecision {
     pub should_push: bool,
     pub reason: ReportReason,
     pub fingerprint: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, uniffi::Record)]
+pub struct SchedulerSnapshot {
+    pub heartbeat_interval_secs: u64,
+    pub last_fingerprint: String,
+    pub last_report_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, uniffi::Record)]
+pub struct SchedulerPlanResult {
+    pub decision: ScheduleDecision,
+    pub snapshot: SchedulerSnapshot,
 }
 
 #[derive(Debug, Default)]
@@ -51,49 +64,87 @@ impl PushScheduler {
     }
 
     pub fn plan(&self, update: Option<StatusUpdate>, now_secs: i64) -> ScheduleDecision {
-        let Some(update) = normalize_status_update(update) else {
-            return ScheduleDecision::default();
+        let snapshot = SchedulerSnapshot {
+            heartbeat_interval_secs: *self.heartbeat_interval_secs.lock().unwrap(),
+            last_fingerprint: self.state.lock().unwrap().last_fingerprint.clone(),
+            last_report_at: self.state.lock().unwrap().last_report_at,
         };
 
-        let fingerprint = serde_json::to_string(&update).unwrap_or_default();
-        let heartbeat_interval_secs = *self.heartbeat_interval_secs.lock().unwrap() as i64;
-        let state = self.state.lock().unwrap();
-
-        if state.last_fingerprint.is_empty() {
-            return ScheduleDecision {
-                should_push: true,
-                reason: ReportReason::Initial,
-                fingerprint,
-            };
-        }
-
-        if state.last_fingerprint != fingerprint {
-            return ScheduleDecision {
-                should_push: true,
-                reason: ReportReason::Changed,
-                fingerprint,
-            };
-        }
-
-        if state.last_report_at <= 0 || now_secs - state.last_report_at >= heartbeat_interval_secs {
-            return ScheduleDecision {
-                should_push: true,
-                reason: ReportReason::Heartbeat,
-                fingerprint,
-            };
-        }
-
-        ScheduleDecision {
-            should_push: false,
-            reason: ReportReason::None,
-            fingerprint,
-        }
+        plan_status_update(snapshot, update, now_secs).decision
     }
 
     pub fn mark_pushed(&self, fingerprint: String, now_secs: i64) {
         let mut state = self.state.lock().unwrap();
         state.last_fingerprint = fingerprint;
         state.last_report_at = now_secs;
+    }
+}
+
+#[uniffi::export]
+pub fn plan_status_update(
+    snapshot: SchedulerSnapshot,
+    update: Option<StatusUpdate>,
+    now_secs: i64,
+) -> SchedulerPlanResult {
+    let snapshot = normalize_snapshot(snapshot);
+    let Some(update) = normalize_status_update(update) else {
+        return SchedulerPlanResult {
+            decision: ScheduleDecision::default(),
+            snapshot,
+        };
+    };
+
+    let fingerprint = serde_json::to_string(&update).unwrap_or_default();
+    let heartbeat_interval_secs = snapshot.heartbeat_interval_secs as i64;
+
+    let decision = if snapshot.last_fingerprint.is_empty() {
+        ScheduleDecision {
+            should_push: true,
+            reason: ReportReason::Initial,
+            fingerprint,
+        }
+    } else if snapshot.last_fingerprint != fingerprint {
+        ScheduleDecision {
+            should_push: true,
+            reason: ReportReason::Changed,
+            fingerprint,
+        }
+    } else if snapshot.last_report_at <= 0
+        || now_secs - snapshot.last_report_at >= heartbeat_interval_secs
+    {
+        ScheduleDecision {
+            should_push: true,
+            reason: ReportReason::Heartbeat,
+            fingerprint,
+        }
+    } else {
+        ScheduleDecision {
+            should_push: false,
+            reason: ReportReason::None,
+            fingerprint,
+        }
+    };
+
+    SchedulerPlanResult { decision, snapshot }
+}
+
+#[uniffi::export]
+pub fn mark_status_pushed(
+    snapshot: SchedulerSnapshot,
+    fingerprint: String,
+    now_secs: i64,
+) -> SchedulerSnapshot {
+    let mut snapshot = normalize_snapshot(snapshot);
+    snapshot.last_fingerprint = fingerprint;
+    snapshot.last_report_at = now_secs;
+    snapshot
+}
+
+fn normalize_snapshot(snapshot: SchedulerSnapshot) -> SchedulerSnapshot {
+    SchedulerSnapshot {
+        heartbeat_interval_secs: snapshot.heartbeat_interval_secs.max(5),
+        last_fingerprint: snapshot.last_fingerprint,
+        last_report_at: snapshot.last_report_at,
     }
 }
 
@@ -136,7 +187,9 @@ fn clean_media(media: MediaInfo) -> Option<MediaInfo> {
 
 #[cfg(test)]
 mod tests {
-    use super::{PushScheduler, ReportReason};
+    use super::{
+        SchedulerSnapshot, PushScheduler, ReportReason, mark_status_pushed, plan_status_update,
+    };
     use crate::StatusUpdate;
 
     #[test]
@@ -206,5 +259,41 @@ mod tests {
             11,
         );
         assert_eq!(heartbeat.reason, ReportReason::Heartbeat);
+    }
+
+    #[test]
+    fn stateless_snapshot_bridge_matches_scheduler_flow() {
+        let snapshot = SchedulerSnapshot {
+            heartbeat_interval_secs: 10,
+            last_fingerprint: String::new(),
+            last_report_at: 0,
+        };
+
+        let planned = plan_status_update(
+            snapshot,
+            Some(StatusUpdate {
+                ok: Some(1),
+                process: Some("Kitty".into()),
+                extend: None,
+                media: None,
+                timestamp: Some(1),
+            }),
+            1,
+        );
+        assert_eq!(planned.decision.reason, ReportReason::Initial);
+
+        let snapshot = mark_status_pushed(planned.snapshot, planned.decision.fingerprint.clone(), 1);
+        let second = plan_status_update(
+            snapshot,
+            Some(StatusUpdate {
+                ok: Some(1),
+                process: Some("Kitty".into()),
+                extend: None,
+                media: None,
+                timestamp: Some(5),
+            }),
+            5,
+        );
+        assert_eq!(second.decision.reason, ReportReason::None);
     }
 }

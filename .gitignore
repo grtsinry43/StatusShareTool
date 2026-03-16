@@ -1,8 +1,29 @@
-target/
-/.idea
-/.vscode
+﻿target/
 Cargo.lock
-/bin/
-/obj/
+
+.idea/
+.vscode/
+.vs/
+
 DerivedData/
 apps/macos-swiftui/Generated/
+
+# .NET / WPF
+**/bin/
+**/obj/
+**/*.user
+**/*.suo
+**/*.userosscache
+**/*.rsuser
+**/*.pdb
+**/*.cache
+**/*.tmp
+**/*.log
+
+# Local backups
+*.bak
+*.tmp
+*~
+*.orig
+*.rej
+lib-rust-backup.txt
