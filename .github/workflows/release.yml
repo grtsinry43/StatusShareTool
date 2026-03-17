@@ -47,6 +47,8 @@ jobs:
             target/aarch64-apple-darwin/release/libstatusshare_core.a \
             target/x86_64-apple-darwin/release/libstatusshare_core.a \
             -output target/release/libstatusshare_core.a
+          # Remove host-only dylib so linker uses the universal .a
+          rm -f target/release/libstatusshare_core.dylib
 
       - name: Install xcodegen
         run: brew install xcodegen
