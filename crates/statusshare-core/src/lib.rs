@@ -1,4 +1,4 @@
-﻿mod scheduler;
+mod scheduler;
 
 pub use scheduler::{PushScheduler, ReportReason, ScheduleDecision, SchedulerPlanResult, SchedulerSnapshot, mark_status_pushed, plan_status_update};
 

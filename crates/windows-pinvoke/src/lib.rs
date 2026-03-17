@@ -1,4 +1,4 @@
-﻿use std::ffi::{CStr, CString, c_char};
+use std::ffi::{CStr, CString, c_char};
 use std::path::Path;
 use std::ptr;
 
