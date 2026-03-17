@@ -63,6 +63,8 @@ jobs:
             -scheme StatusShareMac \
             -configuration Release \
             -derivedDataPath build \
+            ARCHS="arm64 x86_64" \
+            ONLY_ACTIVE_ARCH=NO \
             MARKETING_VERSION=${{ steps.version.outputs.VERSION }} \
             CODE_SIGNING_ALLOWED=NO
 
@@ -121,7 +123,6 @@ jobs:
         working-directory: apps/windows-wpf/StatusShare.Wpf
         run: |
           dotnet publish -c Release -r win-x64 --self-contained `
-            -p:PublishSingleFile=true `
             -p:Version=${{ steps.version.outputs.VERSION }} `
             -o ..\..\..\publish
 
@@ -168,39 +169,30 @@ jobs:
         run: cargo build -p statussharetool --release
 
       - name: Build AppImage
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+          DEPLOY_GTK_VERSION: "4"
         run: |
           VERSION="${{ steps.version.outputs.VERSION }}"
 
-          # Download appimagetool
-          wget -q https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage -O appimagetool
-          chmod +x appimagetool
+          # Download linuxdeploy and GTK plugin for proper library bundling
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          wget -q https://raw.githubusercontent.com/linuxdeploy/linuxdeploy-plugin-gtk/master/linuxdeploy-plugin-gtk.sh
+          chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-gtk.sh
 
-          # Create AppDir structure
-          mkdir -p AppDir/usr/bin
-          mkdir -p AppDir/usr/share/applications
-          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+          ./linuxdeploy-x86_64.AppImage \
+            --appdir AppDir \
+            --executable target/release/statussharetool \
+            --desktop-file apps/linux-gtk/resources/com.grtsinry43.statussharetool.desktop \
+            --icon-file apps/linux-gtk/resources/com.grtsinry43.statussharetool.png \
+            --plugin gtk \
+            --output appimage
 
-          cp target/release/statussharetool AppDir/usr/bin/
-          cp apps/linux-gtk/resources/com.grtsinry43.statussharetool.desktop AppDir/usr/share/applications/
-          cp apps/linux-gtk/resources/com.grtsinry43.statussharetool.desktop AppDir/
+          # Clean up tools before renaming to avoid glob conflicts
+          rm -f linuxdeploy-x86_64.AppImage linuxdeploy-plugin-gtk.sh
 
-          # Copy application icon
-          cp apps/linux-gtk/resources/com.grtsinry43.statussharetool.png AppDir/
-          cp apps/linux-gtk/resources/com.grtsinry43.statussharetool.png AppDir/usr/share/icons/hicolor/256x256/apps/
-          cp apps/linux-gtk/resources/com.grtsinry43.statussharetool.png AppDir/.DirIcon
-
-          # Create AppRun
-          cat > AppDir/AppRun << 'APPRUN'
-          #!/bin/bash
-          SELF="$(readlink -f "$0")"
-          HERE="${SELF%/*}"
-          exec "${HERE}/usr/bin/statussharetool" "$@"
-          APPRUN
-          # Remove leading whitespace from AppRun
-          sed -i 's/^          //' AppDir/AppRun
-          chmod +x AppDir/AppRun
-
-          ARCH=x86_64 ./appimagetool AppDir "StatusShareTool-${VERSION}-linux-x86_64.AppImage"
+          # Rename the generated AppImage to standard naming convention
+          mv *.AppImage "StatusShareTool-${VERSION}-linux-x86_64.AppImage"
 
       - name: Build deb package
         run: |
@@ -282,7 +274,7 @@ jobs:
             echo ""
             echo "| Platform | File | Notes |"
             echo "|----------|------|-------|"
-            echo "| macOS (Universal) | \`StatusShareTool-${{ steps.version.outputs.VERSION }}-macOS-universal.dmg\` | Requires \"Allow apps from anywhere\" or right-click → Open |"
+            echo "| macOS (Universal) | \`StatusShareTool-${{ steps.version.outputs.VERSION }}-macOS-universal.dmg\` | First run: \`sudo xattr -rd com.apple.quarantine /Applications/StatusShareMac.app\` |"
             echo "| Windows (x64) | \`StatusShareTool-${{ steps.version.outputs.VERSION }}-windows-x64-setup.exe\` | SmartScreen may warn; click \"Run anyway\" |"
             echo "| Linux (AppImage) | \`StatusShareTool-${{ steps.version.outputs.VERSION }}-linux-x86_64.AppImage\` | \`chmod +x\` then run |"
             echo "| Linux (deb) | \`StatusShareTool-${{ steps.version.outputs.VERSION }}-linux-amd64.deb\` | \`sudo dpkg -i <file>\` |"
