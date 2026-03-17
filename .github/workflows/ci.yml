@@ -21,6 +21,8 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci-linux
 
       - name: Cargo check (core)
         run: cargo check -p statusshare-core
@@ -41,6 +43,8 @@ jobs:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci-macos
 
       - name: Generate Swift bindings
         run: |
@@ -92,6 +96,8 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci-windows
 
       - name: Build native DLL
         run: cargo build -p windows-pinvoke --release
@@ -120,6 +126,8 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci-linux
 
       - name: Build Linux GTK application
         run: cargo build -p statussharetool --release

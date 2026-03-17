@@ -64,11 +64,14 @@ impl PushScheduler {
     }
 
     pub fn plan(&self, update: Option<StatusUpdate>, now_secs: i64) -> ScheduleDecision {
+        let interval = *self.heartbeat_interval_secs.lock().unwrap();
+        let state = self.state.lock().unwrap();
         let snapshot = SchedulerSnapshot {
-            heartbeat_interval_secs: *self.heartbeat_interval_secs.lock().unwrap(),
-            last_fingerprint: self.state.lock().unwrap().last_fingerprint.clone(),
-            last_report_at: self.state.lock().unwrap().last_report_at,
+            heartbeat_interval_secs: interval,
+            last_fingerprint: state.last_fingerprint.clone(),
+            last_report_at: state.last_report_at,
         };
+        drop(state);
 
         plan_status_update(snapshot, update, now_secs).decision
     }
@@ -94,7 +97,9 @@ pub fn plan_status_update(
         };
     };
 
-    let fingerprint = serde_json::to_string(&update).unwrap_or_default();
+    // Exclude timestamp from fingerprint so only content changes trigger a push
+    let fingerprint_data = (&update.ok, &update.process, &update.extend, &update.media);
+    let fingerprint = serde_json::to_string(&fingerprint_data).unwrap_or_default();
     let heartbeat_interval_secs = snapshot.heartbeat_interval_secs as i64;
 
     let decision = if snapshot.last_fingerprint.is_empty() {
