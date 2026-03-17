@@ -1,61 +1,98 @@
 # StatusShareTool
 
-跨平台桌面状态上报工具，面向 `grtblog-v2` 后端的 `/api/v2/onlineStatus` 接口。
+<p align="center">
+  <img src="assets/icon.png" alt="StatusShareTool" width="128" />
+</p>
 
-核心流程是读取当前活动窗口，按匹配规则决定：
+<p align="center">
+  <strong>grtblog-v2 站长状态上报工具</strong>
+</p>
 
-- 是否上报
-- 上报什么外显名称
-- 上报什么 `extend`
-- 媒体信息是对象还是 `null`
+<p align="center">
+  跨平台桌面客户端，实时将你的电脑使用状态同步到博客，让访客知道站长正在做什么。
+</p>
 
-## 技术栈
+---
 
-- Core: Rust + UniFFI
-- Windows shell: WPF + Wpf.Ui
-- Windows native bridge: Rust `cdylib` + P/Invoke
-- macOS shell: SwiftUI
-- Linux shell: `gtk-rs`
+StatusShareTool 是 [grtblog-v2](https://github.com/grtsinry43/grtblog) 生态中的桌面端组件。它在后台静默运行，自动检测当前活动窗口和正在播放的媒体信息，并按照你配置的匹配规则上报到博客后端，在站点首页展示站长的实时状态。
 
-## 当前仓库状态
+## 功能特性
 
-- 已实现 Rust core API 客户端和心跳逻辑
-- 已实现窗口匹配规则的数据模型和决策逻辑
-- 已实现配置 JSON 持久化与默认配置路径
-- 已实现 Windows P/Invoke JSON bridge
-- 已实现 Linux GTK 参考客户端
-- 已写好 WPF / SwiftUI 工程骨架与接线代码
-- 已补后端 API 契约与架构文档
+- **活动窗口检测** — 自动识别当前正在使用的应用程序
+- **媒体播放检测** — 获取正在播放的音乐/视频信息（标题、艺术家、封面等）
+- **灵活的匹配规则** — 自定义哪些应用需要上报、显示什么名称、附带什么扩展信息
+- **跨平台支持** — macOS / Windows / Linux 三端可用
+- **后台静默运行** — 系统托盘常驻，不打扰日常使用
 
-## 快速开始
+## 下载安装
 
-```bash
-cargo check -p statusshare-core
-cargo check -p windows-pinvoke
-cargo run -p linux-gtk
+前往 [Releases](https://github.com/grtsinry43/StatusShareTool/releases) 页面下载对应平台的安装包：
+
+| 平台 | 格式 | 说明 |
+|------|------|------|
+| macOS (Intel & Apple Silicon) | `.dmg` | 拖入 Applications 即可使用 |
+| Windows (x64) | `.exe` 安装包 | 运行安装向导 |
+| Linux (x86_64) | `.AppImage` / `.deb` | AppImage 直接运行；deb 用 `dpkg -i` 安装 |
+
+## 使用方式
+
+1. 在 grtblog-v2 后台获取管理员 Token（`gt_` 开头）
+2. 打开 StatusShareTool，填入后端地址和 Token
+3. 配置窗口匹配规则（可选）
+4. 保持后台运行，状态会自动同步到博客
+
+## 技术架构
+
+```
+┌──────────────────────────────────────────────┐
+│              statusshare-core (Rust)          │
+│         业务逻辑 · 规则引擎 · API 客户端       │
+└──────┬──────────────┬──────────────┬─────────┘
+       │ UniFFI/Swift │ cdylib/P/Invoke│ 直接依赖
+┌──────▼──────┐ ┌─────▼───────┐ ┌─────▼──────┐
+│ macOS       │ │ Windows     │ │ Linux      │
+│ SwiftUI     │ │ WPF+Wpf.Ui │ │ GTK4       │
+└─────────────┘ └─────────────┘ └────────────┘
 ```
 
-## 目录
+## 配置文件
 
-- `crates/statusshare-core`: 业务核心
-- `crates/windows-pinvoke`: Windows 原生桥
-- `apps/linux-gtk`: Linux 桌面端
-- `apps/windows-wpf`: Windows 壳层
-- `apps/macos-swiftui`: macOS 壳层
-- `scripts/generate-swift-bindings.sh`: 生成 Swift UniFFI bindings
-- `scripts/build-c-api.sh`: 构建 C API 动态库
-- `docs/api-contract.md`: 后端接口说明
-- `docs/architecture.md`: 项目结构与绑定策略
+配置以 JSON 格式存储在系统标准配置目录下：
 
-## Token 约束
+| 平台 | 路径 |
+|------|------|
+| Windows | `%APPDATA%\StatusShareTool\config.json` |
+| macOS | `~/Library/Application Support/StatusShareTool/config.json` |
+| Linux | `~/.config/StatusShareTool/config.json` |
 
-这个项目的客户端需要传 `gt_` 开头的管理员 token。
+## 从源码构建
 
-## 配置持久化
+```bash
+# 检查核心库
+cargo check -p statusshare-core
 
-推荐持久化方式是默认配置目录下的单文件 JSON：
+# 运行 Linux 客户端
+cargo run -p statussharetool
 
-- Windows: `%APPDATA%\\StatusShareTool\\config.json`
-- macOS: `~/Library/Application Support/StatusShareTool/config.json`
-- Linux: `$XDG_CONFIG_HOME/StatusShareTool/config.json`
-  - 或 `~/.config/StatusShareTool/config.json`
+# Windows 客户端（需要 .NET 8 SDK）
+cd apps/windows-wpf/StatusShare.Wpf && dotnet run
+
+# macOS 客户端（需要 Xcode + xcodegen）
+cd apps/macos-swiftui && xcodegen generate && open StatusShareMac.xcodeproj
+```
+
+## 项目结构
+
+```
+crates/statusshare-core    # Rust 业务核心
+crates/windows-pinvoke     # Windows 原生桥接 (cdylib)
+apps/macos-swiftui         # macOS 客户端
+apps/windows-wpf           # Windows 客户端
+apps/linux-gtk             # Linux 客户端
+installer/                 # Windows Inno Setup 安装脚本
+docs/                      # API 契约与架构文档
+```
+
+## License
+
+MIT

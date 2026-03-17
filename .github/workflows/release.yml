@@ -1,0 +1,298 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    name: Build macOS DMG
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build staticlib (arm64)
+        run: cargo build -p statusshare-core --release --target aarch64-apple-darwin
+
+      - name: Build staticlib (x86_64)
+        run: cargo build -p statusshare-core --release --target x86_64-apple-darwin
+
+      - name: Create universal static library
+        run: |
+          mkdir -p target/release
+          lipo -create \
+            target/aarch64-apple-darwin/release/libstatusshare_core.a \
+            target/x86_64-apple-darwin/release/libstatusshare_core.a \
+            -output target/release/libstatusshare_core.a
+
+      - name: Generate Swift bindings
+        run: |
+          cargo build -p statusshare-core --release
+          cargo run -p statusshare-core --bin uniffi-bindgen -- generate \
+            --library target/release/libstatusshare_core.dylib \
+            --language swift \
+            --out-dir apps/macos-swiftui/Generated
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: apps/macos-swiftui
+        run: xcodegen generate
+
+      - name: Build Release with xcodebuild
+        working-directory: apps/macos-swiftui
+        run: |
+          xcodebuild build \
+            -project StatusShareMac.xcodeproj \
+            -scheme StatusShareMac \
+            -configuration Release \
+            -derivedDataPath build \
+            MARKETING_VERSION=${{ steps.version.outputs.VERSION }} \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Ad-hoc code sign
+        run: |
+          APP_PATH="apps/macos-swiftui/build/Build/Products/Release/StatusShareMac.app"
+          codesign -s - --deep --force "$APP_PATH"
+
+      - name: Create DMG
+        run: |
+          APP_PATH="apps/macos-swiftui/build/Build/Products/Release/StatusShareMac.app"
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          DMG_NAME="StatusShareTool-${VERSION}-macOS-universal.dmg"
+
+          # Create staging directory
+          mkdir -p dmg-staging
+          cp -R "$APP_PATH" dmg-staging/
+          ln -s /Applications dmg-staging/Applications
+
+          # Create DMG
+          hdiutil create -volname "StatusShareTool" \
+            -srcfolder dmg-staging \
+            -ov -format UDZO \
+            "$DMG_NAME"
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: "*.dmg"
+
+  build-windows:
+    name: Build Windows Installer
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build native DLL
+        run: cargo build -p windows-pinvoke --release
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Publish WPF application
+        working-directory: apps/windows-wpf/StatusShare.Wpf
+        run: |
+          dotnet publish -c Release -r win-x64 --self-contained `
+            -p:PublishSingleFile=true `
+            -p:Version=${{ steps.version.outputs.VERSION }} `
+            -o ..\..\..\publish
+
+      - name: Copy native DLL to publish
+        shell: bash
+        run: cp target/release/windows_pinvoke.dll publish/
+
+      - name: Update Inno Setup version
+        shell: bash
+        run: |
+          sed -i "s/#define MyAppVersion \"0.1.0\"/#define MyAppVersion \"${{ steps.version.outputs.VERSION }}\"/" installer/statussharetool.iss
+
+      - name: Build installer with Inno Setup
+        shell: cmd
+        run: |
+          "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\statussharetool.iss
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: dist/*.exe
+
+  build-linux:
+    name: Build Linux Packages
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-4-dev libglib2.0-dev libdbus-1-dev
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build release binary
+        run: cargo build -p statussharetool --release
+
+      - name: Build AppImage
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+
+          # Download appimagetool
+          wget -q https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage -O appimagetool
+          chmod +x appimagetool
+
+          # Create AppDir structure
+          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/share/applications
+          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+
+          cp target/release/statussharetool AppDir/usr/bin/
+          cp apps/linux-gtk/resources/com.grtsinry43.statussharetool.desktop AppDir/usr/share/applications/
+          cp apps/linux-gtk/resources/com.grtsinry43.statussharetool.desktop AppDir/
+
+          # Copy application icon
+          cp apps/linux-gtk/resources/com.grtsinry43.statussharetool.png AppDir/
+          cp apps/linux-gtk/resources/com.grtsinry43.statussharetool.png AppDir/usr/share/icons/hicolor/256x256/apps/
+          cp apps/linux-gtk/resources/com.grtsinry43.statussharetool.png AppDir/.DirIcon
+
+          # Create AppRun
+          cat > AppDir/AppRun << 'APPRUN'
+          #!/bin/bash
+          SELF="$(readlink -f "$0")"
+          HERE="${SELF%/*}"
+          exec "${HERE}/usr/bin/statussharetool" "$@"
+          APPRUN
+          # Remove leading whitespace from AppRun
+          sed -i 's/^          //' AppDir/AppRun
+          chmod +x AppDir/AppRun
+
+          ARCH=x86_64 ./appimagetool AppDir "StatusShareTool-${VERSION}-linux-x86_64.AppImage"
+
+      - name: Build deb package
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          PKG_DIR="statussharetool_${VERSION}_amd64"
+
+          mkdir -p "${PKG_DIR}/DEBIAN"
+          mkdir -p "${PKG_DIR}/usr/bin"
+          mkdir -p "${PKG_DIR}/usr/share/applications"
+
+          cp target/release/statussharetool "${PKG_DIR}/usr/bin/"
+          cp apps/linux-gtk/resources/com.grtsinry43.statussharetool.desktop "${PKG_DIR}/usr/share/applications/"
+
+          cat > "${PKG_DIR}/DEBIAN/control" << EOF
+          Package: statussharetool
+          Version: ${VERSION}
+          Section: utils
+          Priority: optional
+          Architecture: amd64
+          Depends: libgtk-4-1 (>= 4.6)
+          Maintainer: grtsinry43 <grtsinry43@gmail.com>
+          Description: Cross-platform desktop status reporting tool
+           StatusShareTool reports your desktop activity status
+           including media playback and active window information.
+          EOF
+          # Remove leading whitespace from control file
+          sed -i 's/^          //' "${PKG_DIR}/DEBIAN/control"
+
+          dpkg-deb --build "${PKG_DIR}"
+          mv "${PKG_DIR}.deb" "StatusShareTool-${VERSION}-linux-amd64.deb"
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: |
+            *.AppImage
+            *.deb
+
+  release:
+    name: Create GitHub Release
+    needs: [build-macos, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get the previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -z "$PREV_TAG" ]; then
+            CHANGELOG=$(git log --oneline --no-decorate)
+          else
+            CHANGELOG=$(git log --oneline --no-decorate "${PREV_TAG}..HEAD")
+          fi
+
+          # Write to file for the release body
+          {
+            echo "## What's Changed"
+            echo ""
+            echo "$CHANGELOG" | while IFS= read -r line; do
+              echo "- $line"
+            done
+            echo ""
+            echo "## Downloads"
+            echo ""
+            echo "| Platform | File | Notes |"
+            echo "|----------|------|-------|"
+            echo "| macOS (Universal) | \`StatusShareTool-${{ steps.version.outputs.VERSION }}-macOS-universal.dmg\` | Requires \"Allow apps from anywhere\" or right-click → Open |"
+            echo "| Windows (x64) | \`StatusShareTool-${{ steps.version.outputs.VERSION }}-windows-x64-setup.exe\` | SmartScreen may warn; click \"Run anyway\" |"
+            echo "| Linux (AppImage) | \`StatusShareTool-${{ steps.version.outputs.VERSION }}-linux-x86_64.AppImage\` | \`chmod +x\` then run |"
+            echo "| Linux (deb) | \`StatusShareTool-${{ steps.version.outputs.VERSION }}-linux-amd64.deb\` | \`sudo dpkg -i <file>\` |"
+          } > release_body.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release_body.md
+          files: artifacts/*
+          generate_release_notes: false

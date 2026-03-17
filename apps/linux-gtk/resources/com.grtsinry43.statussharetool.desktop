@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=StatusShareTool
+Comment=Cross-platform desktop status reporting tool
+Exec=statussharetool
+Icon=com.grtsinry43.statussharetool
+Terminal=false
+Type=Application
+Categories=Utility;Network;
+Keywords=status;share;report;
+StartupNotify=true

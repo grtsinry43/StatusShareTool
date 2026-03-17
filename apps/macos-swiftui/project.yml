@@ -1,6 +1,6 @@
 name: StatusShareMac
 options:
-  bundleIdPrefix: dev.grtsinry43
+  bundleIdPrefix: com.grtsinry43
 settings:
   base:
     SWIFT_VERSION: 6.0
@@ -15,8 +15,9 @@ targets:
         type: file
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: dev.grtsinry43.StatusShareMac
+        PRODUCT_BUNDLE_IDENTIFIER: com.grtsinry43.statussharetool
         PRODUCT_NAME: StatusShareMac
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
         INFOPLIST_KEY_LSUIElement: false

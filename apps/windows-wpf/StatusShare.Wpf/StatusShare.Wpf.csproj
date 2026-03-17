@@ -5,6 +5,12 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <AssemblyName>StatusShareTool</AssemblyName>
+    <Version>0.1.0</Version>
+    <Product>StatusShareTool</Product>
+    <Company>grtsinry43</Company>
+    <Description>Cross-platform desktop status reporting tool</Description>
+    <ApplicationIcon>app.ico</ApplicationIcon>
     <StatusShareRepoRoot>$(MSBuildThisFileDirectory)..\..\..</StatusShareRepoRoot>
     <RustProfile Condition="'$(Configuration)' == 'Release'">release</RustProfile>
     <RustProfile Condition="'$(RustProfile)' == ''">debug</RustProfile>
