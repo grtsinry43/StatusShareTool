@@ -1,0 +1,386 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		038EF8BCD7697793DBD30DE3 /* MenuBarPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = F06E2DF3A6ED056E1385FB9B /* MenuBarPopover.swift */; };
+		0ADD3365F48DA223E012EB8B /* RulesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7022CC0DD2A5E1E3E8D02424 /* RulesView.swift */; };
+		3592430129D47A3044EEBD28 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA8B73BD13D3A1C233CA792B /* ContentView.swift */; };
+		481D74B664A8AD554000D166 /* LogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A93EC68D999358449891B54 /* LogView.swift */; };
+		492357CE2AC619BFA05B6932 /* MonitorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53B87C33B3F5F8D739CC5798 /* MonitorService.swift */; };
+		5B6FEBFC6EAADF6E1C7E854C /* statusshare_core.swift in Sources */ = {isa = PBXBuildFile; fileRef = F14D226F18B75536AB492507 /* statusshare_core.swift */; };
+		6C3ED4639388CE5CF021E61A /* StatusShareMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4788CBF4BE315AD5C2F5EC0B /* StatusShareMacApp.swift */; };
+		842A63763B1FA5B8B5611AE6 /* AppViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A79D45D7D6FF7CF6624189D /* AppViewModel.swift */; };
+		8A69BE67DD4BB838F3D86D92 /* DebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F6BB2C5412F8161D89B746C /* DebugView.swift */; };
+		91B3344ABE69E5AFF0092D43 /* MediaDetectionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E582C41FA87A550ABDC8DFB /* MediaDetectionService.swift */; };
+		B14D83C482A5E89376D67D1B /* WindowDetectionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F5168BA84291124A8AEDABC /* WindowDetectionService.swift */; };
+		DE786768292A7A06EE2535E0 /* CompactCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9F0401003670569A37A7596 /* CompactCardView.swift */; };
+		E0747B3AC9BBC43795859FDE /* Sidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202B9C2F9B2C9F51701A0092 /* Sidebar.swift */; };
+		E821C97B75BD6AA9598F462A /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC7724C65649A5132223D719 /* HomeView.swift */; };
+		FED4F39A71D8B291A25ED777 /* ConfigView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE9A92D27BE44962F3E336CC /* ConfigView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		202B9C2F9B2C9F51701A0092 /* Sidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sidebar.swift; sourceTree = "<group>"; };
+		2A79D45D7D6FF7CF6624189D /* AppViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppViewModel.swift; sourceTree = "<group>"; };
+		3F5168BA84291124A8AEDABC /* WindowDetectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowDetectionService.swift; sourceTree = "<group>"; };
+		3F6BB2C5412F8161D89B746C /* DebugView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugView.swift; sourceTree = "<group>"; };
+		4788CBF4BE315AD5C2F5EC0B /* StatusShareMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusShareMacApp.swift; sourceTree = "<group>"; };
+		53B87C33B3F5F8D739CC5798 /* MonitorService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonitorService.swift; sourceTree = "<group>"; };
+		5E582C41FA87A550ABDC8DFB /* MediaDetectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaDetectionService.swift; sourceTree = "<group>"; };
+		7022CC0DD2A5E1E3E8D02424 /* RulesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RulesView.swift; sourceTree = "<group>"; };
+		79C5FE4BFB89B754B1F87725 /* StatusShareMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StatusShareMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		7A93EC68D999358449891B54 /* LogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogView.swift; sourceTree = "<group>"; };
+		B9F0401003670569A37A7596 /* CompactCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompactCardView.swift; sourceTree = "<group>"; };
+		BC7724C65649A5132223D719 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		CE9A92D27BE44962F3E336CC /* ConfigView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigView.swift; sourceTree = "<group>"; };
+		CEF52C4DB851B8FF88D1D0D1 /* StatusShareMac.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StatusShareMac.entitlements; sourceTree = "<group>"; };
+		EA8B73BD13D3A1C233CA792B /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		F06E2DF3A6ED056E1385FB9B /* MenuBarPopover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarPopover.swift; sourceTree = "<group>"; };
+		F14D226F18B75536AB492507 /* statusshare_core.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = statusshare_core.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		06D2474492C96783C85B1304 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				B9F0401003670569A37A7596 /* CompactCardView.swift */,
+				CE9A92D27BE44962F3E336CC /* ConfigView.swift */,
+				3F6BB2C5412F8161D89B746C /* DebugView.swift */,
+				BC7724C65649A5132223D719 /* HomeView.swift */,
+				7A93EC68D999358449891B54 /* LogView.swift */,
+				F06E2DF3A6ED056E1385FB9B /* MenuBarPopover.swift */,
+				7022CC0DD2A5E1E3E8D02424 /* RulesView.swift */,
+				202B9C2F9B2C9F51701A0092 /* Sidebar.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		091877DB62FAA427FD799F8D /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				5E582C41FA87A550ABDC8DFB /* MediaDetectionService.swift */,
+				53B87C33B3F5F8D739CC5798 /* MonitorService.swift */,
+				3F5168BA84291124A8AEDABC /* WindowDetectionService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		30C018BE46C7DCC8791BFC44 = {
+			isa = PBXGroup;
+			children = (
+				B69F38DAB97FA3A0FC0BED96 /* Generated */,
+				926175080A58683DAC3F5C8F /* StatusShareMac */,
+				66F59E84D8FA2A6A870661B7 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		66F59E84D8FA2A6A870661B7 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				79C5FE4BFB89B754B1F87725 /* StatusShareMac.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		926175080A58683DAC3F5C8F /* StatusShareMac */ = {
+			isa = PBXGroup;
+			children = (
+				EA8B73BD13D3A1C233CA792B /* ContentView.swift */,
+				CEF52C4DB851B8FF88D1D0D1 /* StatusShareMac.entitlements */,
+				4788CBF4BE315AD5C2F5EC0B /* StatusShareMacApp.swift */,
+				091877DB62FAA427FD799F8D /* Services */,
+				EB3AA844746BF308492A4C58 /* ViewModels */,
+				06D2474492C96783C85B1304 /* Views */,
+			);
+			path = StatusShareMac;
+			sourceTree = "<group>";
+		};
+		B69F38DAB97FA3A0FC0BED96 /* Generated */ = {
+			isa = PBXGroup;
+			children = (
+				F14D226F18B75536AB492507 /* statusshare_core.swift */,
+			);
+			path = Generated;
+			sourceTree = "<group>";
+		};
+		EB3AA844746BF308492A4C58 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				2A79D45D7D6FF7CF6624189D /* AppViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		622419DB07E4BA49BA12A568 /* StatusShareMac */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F7674DAF0E3B7824D1211B24 /* Build configuration list for PBXNativeTarget "StatusShareMac" */;
+			buildPhases = (
+				8D07AE4EC2581155CD7EBA81 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = StatusShareMac;
+			packageProductDependencies = (
+			);
+			productName = StatusShareMac;
+			productReference = 79C5FE4BFB89B754B1F87725 /* StatusShareMac.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		88B2058501AA1D9C974384B5 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+				};
+			};
+			buildConfigurationList = A0DE6682BA6007C10BC2034B /* Build configuration list for PBXProject "StatusShareMac" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 30C018BE46C7DCC8791BFC44;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 66F59E84D8FA2A6A870661B7 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				622419DB07E4BA49BA12A568 /* StatusShareMac */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		8D07AE4EC2581155CD7EBA81 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				842A63763B1FA5B8B5611AE6 /* AppViewModel.swift in Sources */,
+				DE786768292A7A06EE2535E0 /* CompactCardView.swift in Sources */,
+				FED4F39A71D8B291A25ED777 /* ConfigView.swift in Sources */,
+				3592430129D47A3044EEBD28 /* ContentView.swift in Sources */,
+				8A69BE67DD4BB838F3D86D92 /* DebugView.swift in Sources */,
+				E821C97B75BD6AA9598F462A /* HomeView.swift in Sources */,
+				481D74B664A8AD554000D166 /* LogView.swift in Sources */,
+				91B3344ABE69E5AFF0092D43 /* MediaDetectionService.swift in Sources */,
+				038EF8BCD7697793DBD30DE3 /* MenuBarPopover.swift in Sources */,
+				492357CE2AC619BFA05B6932 /* MonitorService.swift in Sources */,
+				0ADD3365F48DA223E012EB8B /* RulesView.swift in Sources */,
+				E0747B3AC9BBC43795859FDE /* Sidebar.swift in Sources */,
+				6C3ED4639388CE5CF021E61A /* StatusShareMacApp.swift in Sources */,
+				B14D83C482A5E89376D67D1B /* WindowDetectionService.swift in Sources */,
+				5B6FEBFC6EAADF6E1C7E854C /* statusshare_core.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		107BAC1DDA9DA86BDA47FC19 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		B487EE5CC38FB5A7F35C6ED7 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = StatusShareMac/StatusShareMac.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				INFOPLIST_KEY_LSUIElement = NO;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = "$(SRCROOT)/../../target/release";
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				OTHER_LDFLAGS = (
+					"-lstatusshare_core",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = dev.grtsinry43.StatusShareMac;
+				PRODUCT_NAME = StatusShareMac;
+				SDKROOT = macosx;
+				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Generated";
+			};
+			name = Release;
+		};
+		B659C0257F5EA7F220CC4C5B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		D9A8777E7DE351A0DA4D655C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = StatusShareMac/StatusShareMac.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				INFOPLIST_KEY_LSUIElement = NO;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = "$(SRCROOT)/../../target/release";
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				OTHER_LDFLAGS = (
+					"-lstatusshare_core",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = dev.grtsinry43.StatusShareMac;
+				PRODUCT_NAME = StatusShareMac;
+				SDKROOT = macosx;
+				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Generated";
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A0DE6682BA6007C10BC2034B /* Build configuration list for PBXProject "StatusShareMac" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				107BAC1DDA9DA86BDA47FC19 /* Debug */,
+				B659C0257F5EA7F220CC4C5B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F7674DAF0E3B7824D1211B24 /* Build configuration list for PBXNativeTarget "StatusShareMac" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D9A8777E7DE351A0DA4D655C /* Debug */,
+				B487EE5CC38FB5A7F35C6ED7 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 88B2058501AA1D9C974384B5 /* Project object */;
+}

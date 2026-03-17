@@ -1,39 +1,48 @@
 import SwiftUI
 
 struct ContentView: View {
-    @EnvironmentObject private var model: StatusShareViewModel
+    @Bindable var viewModel: AppViewModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Form {
-                TextField("Base URL", text: $model.baseURL)
-                SecureField("Token", text: $model.token)
-                Stepper("Heartbeat \(model.heartbeatInterval) s", value: $model.heartbeatInterval, in: 5...600, step: 5)
-                Toggle("在线 / OK = 1", isOn: $model.ok)
-                TextField("Process", text: $model.process)
-                TextField("Extend", text: $model.extend)
-                TextField("Media Title", text: $model.mediaTitle)
-                TextField("Media Artist", text: $model.mediaArtist)
-                TextField("Media Thumbnail", text: $model.mediaThumbnail)
-            }
-
-            HStack(spacing: 12) {
-                Button("Fetch") {
-                    Task { await model.fetch() }
-                }
-                Button("Push Once") {
-                    Task { await model.push() }
-                }
-                Button(model.heartbeatRunning ? "Stop Heartbeat" : "Start Heartbeat") {
-                    model.toggleHeartbeat()
-                }
-            }
-
-            TextEditor(text: $model.output)
-                .font(.system(.body, design: .monospaced))
-                .border(Color.gray.opacity(0.2))
+        if viewModel.isExpanded {
+            expandedView
+                .frame(minWidth: 960, minHeight: 680)
+        } else {
+            CompactCardView(viewModel: viewModel)
         }
-        .padding(24)
+    }
+
+    private var expandedView: some View {
+        NavigationSplitView {
+            SidebarView(viewModel: viewModel)
+        } detail: {
+            detailView
+        }
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button {
+                    viewModel.isExpanded = false
+                } label: {
+                    Image(systemName: "rectangle.compress.vertical")
+                }
+                .help("收起为卡片")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var detailView: some View {
+        switch viewModel.selectedSidebar {
+        case .home:
+            HomeView(viewModel: viewModel)
+        case .config:
+            ConfigView(viewModel: viewModel)
+        case .rules:
+            RulesView(viewModel: viewModel)
+        case .debug:
+            DebugView(viewModel: viewModel)
+        case .logs:
+            LogView(viewModel: viewModel)
+        }
     }
 }
-

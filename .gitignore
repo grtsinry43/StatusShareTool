@@ -8,6 +8,11 @@ Cargo.lock
 DerivedData/
 apps/macos-swiftui/Generated/
 
+# macOS
+.DS_Store
+*.xcuserstate
+xcuserdata/
+
 # .NET / WPF
 **/bin/
 **/obj/

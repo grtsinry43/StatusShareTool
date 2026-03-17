@@ -11,9 +11,18 @@ targets:
     deploymentTarget: "14.0"
     sources:
       - StatusShareMac
+      - path: Generated/statusshare_core.swift
+        type: file
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.grtsinry43.StatusShareMac
         PRODUCT_NAME: StatusShareMac
+        GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
-
+        INFOPLIST_KEY_LSUIElement: false
+        SWIFT_INCLUDE_PATHS: $(SRCROOT)/Generated
+        LIBRARY_SEARCH_PATHS: $(SRCROOT)/../../target/release
+        OTHER_LDFLAGS:
+          - -lstatusshare_core
+    entitlements:
+      path: StatusShareMac/StatusShareMac.entitlements
