@@ -26,7 +26,8 @@ jobs:
         run: cargo check -p statusshare-core
 
       - name: Cargo test (core)
-        run: cargo test -p statusshare-core
+        run: cargo test -p statusshare-core -- --test-threads=1
+        timeout-minutes: 5
 
   build-macos:
     name: Build macOS
@@ -41,6 +42,16 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      - name: Generate Swift bindings
+        run: |
+          cargo build -p statusshare-core --release
+          cargo run -p statusshare-core --bin uniffi-bindgen -- generate \
+            --library target/release/libstatusshare_core.dylib \
+            --language swift \
+            --out-dir apps/macos-swiftui/Generated
+          cp apps/macos-swiftui/Generated/statusshare_coreFFI.modulemap \
+             apps/macos-swiftui/Generated/module.modulemap
+
       - name: Build staticlib (arm64)
         run: cargo build -p statusshare-core --release --target aarch64-apple-darwin
 
@@ -49,19 +60,10 @@ jobs:
 
       - name: Create universal binary
         run: |
-          mkdir -p target/release
           lipo -create \
             target/aarch64-apple-darwin/release/libstatusshare_core.a \
             target/x86_64-apple-darwin/release/libstatusshare_core.a \
             -output target/release/libstatusshare_core.a
-
-      - name: Generate Swift bindings
-        run: |
-          cargo build -p statusshare-core --release
-          cargo run -p statusshare-core --bin uniffi-bindgen -- generate \
-            --library target/release/libstatusshare_core.dylib \
-            --language swift \
-            --out-dir apps/macos-swiftui/Generated
 
       - name: Install xcodegen
         run: brew install xcodegen
