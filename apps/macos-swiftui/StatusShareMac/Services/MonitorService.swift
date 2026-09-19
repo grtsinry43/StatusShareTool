@@ -64,7 +64,7 @@ final class MonitorService {
             bundleId: window?.bundleId ?? ""
         )
         let mediaInfo: MediaInfo? = media.map {
-            MediaInfo(title: $0.title, artist: $0.artist, thumbnail: $0.thumbnail)
+            MediaInfo(title: $0.title, artist: $0.artist, thumbnail: $0.thumbnail, position: 0, duration: 0, state: "")
         }
         let now = Int64(Date().timeIntervalSince1970)
 

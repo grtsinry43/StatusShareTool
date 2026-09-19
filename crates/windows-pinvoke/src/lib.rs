@@ -9,7 +9,11 @@ use statusshare_core::{
     WindowInfo, default_config_file_path, default_persisted_config, load_persisted_config,
     mark_status_pushed, plan_status_update, resolve_status_update, save_persisted_config,
 };
-use windows::Media::Control::GlobalSystemMediaTransportControlsSessionManager;
+use windows::Foundation::TimeSpan;
+use windows::Media::Control::{
+    GlobalSystemMediaTransportControlsSessionManager,
+    GlobalSystemMediaTransportControlsSessionPlaybackStatus,
+};
 use windows::Win32::Foundation::{CloseHandle, HWND, MAX_PATH};
 use windows::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -257,9 +261,44 @@ fn detect_media() -> Result<Option<MediaInfo>, String> {
     let thumbnail = String::new();
 
     if title.is_empty() && artist.is_empty() && thumbnail.is_empty() {
-        Ok(None)
-    } else {
-        Ok(Some(MediaInfo { title, artist, thumbnail }))
+        return Ok(None);
+    }
+
+    let (position, duration) = match session.GetTimelineProperties() {
+        Ok(timeline) => {
+            let position = timespan_to_secs(timeline.Position().unwrap_or_default());
+            let duration = timespan_to_secs(timeline.EndTime().unwrap_or_default());
+            (position, duration)
+        }
+        Err(_) => (0.0, 0.0),
+    };
+    let state = session
+        .GetPlaybackInfo()
+        .ok()
+        .and_then(|info| info.PlaybackStatus().ok())
+        .map(playback_state)
+        .unwrap_or_default();
+
+    Ok(Some(MediaInfo {
+        title,
+        artist,
+        thumbnail,
+        position,
+        duration,
+        state,
+    }))
+}
+
+fn timespan_to_secs(value: TimeSpan) -> f64 {
+    (value.Duration as f64 / 10_000_000.0).max(0.0)
+}
+
+fn playback_state(status: GlobalSystemMediaTransportControlsSessionPlaybackStatus) -> String {
+    match status {
+        GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing => "playing".to_string(),
+        GlobalSystemMediaTransportControlsSessionPlaybackStatus::Paused => "paused".to_string(),
+        GlobalSystemMediaTransportControlsSessionPlaybackStatus::Stopped => "stopped".to_string(),
+        _ => String::new(),
     }
 }
 

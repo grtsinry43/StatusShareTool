@@ -11,6 +11,7 @@ serde.workspace = true
 serde_json.workspace = true
 statusshare-core = { path = "../statusshare-core" }
 windows = { version = "0.61.3", features = [
+  "Foundation",
   "Media_Control",
   "Win32_Foundation",
   "Win32_System_Threading",

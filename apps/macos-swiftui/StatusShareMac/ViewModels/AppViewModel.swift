@@ -119,7 +119,9 @@ final class AppViewModel {
             caseSensitive: false,
             reportPolicy: .allow,
             displayName: "",
-            extend: ""
+            extend: "",
+            category: "",
+            game: GameMeta(name: "", cover: "", slogan: "", desc: "", accent: "", url: "")
         )
         matchingConfig = MatchEngineConfig(
             defaultReport: matchingConfig.defaultReport,

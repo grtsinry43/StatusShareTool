@@ -14,13 +14,22 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly DispatcherTimer _monitorTimer;
     private readonly WindowDetectionService _windowDetectionService = new();
     private readonly MediaDetectionService _mediaDetectionService = new();
+    private readonly GameLookupService _gameLookupService = new();
     private bool _tickRunning;
     private SchedulerSnapshotDto _schedulerSnapshot = new();
+    private CancellationTokenSource? _gameLookupCts;
+    private GameLookupPreview? _gameLookupPreview;
 
     public ObservableCollection<WindowMatchRuleModel> Rules { get; } = [];
     public IReadOnlyList<MatchField> MatchFields { get; } = Enum.GetValues<MatchField>();
     public IReadOnlyList<MatchKind> MatchKinds { get; } = Enum.GetValues<MatchKind>();
     public IReadOnlyList<ReportPolicy> ReportPolicies { get; } = Enum.GetValues<ReportPolicy>();
+    public IReadOnlyList<CategoryOption> Categories { get; } =
+    [
+        new("app", "普通应用"),
+        new("game", "游戏 Game"),
+        new("music", "音乐 Music"),
+    ];
 
     [ObservableProperty] private string _configPath = string.Empty;
     [ObservableProperty] private string _baseUrl = "http://127.0.0.1:3000";
@@ -35,6 +44,7 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private string _intervalDisplay = "10s";
     [ObservableProperty] private string _resolvedName = "-";
     [ObservableProperty] private string _resolvedExtend = "-";
+    [ObservableProperty] private string _resolvedCategory = "-";
     [ObservableProperty] private string _matchedRuleId = "-";
     [ObservableProperty] private string _serverSummary = "暂无数据";
     [ObservableProperty] private string _windowTitle = "等待监控启动";
@@ -46,9 +56,23 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private string _mediaArtist = "-";
     [ObservableProperty] private string _mediaThumbnail = "-";
     [ObservableProperty] private string _mediaThumbnailPath = string.Empty;
+    [ObservableProperty] private string _mediaProgressText = "-";
     [ObservableProperty] private string _logOutput = string.Empty;
     [ObservableProperty] private WindowMatchRuleModel? _selectedRule;
     [ObservableProperty] private bool _isMonitoring;
+    [ObservableProperty] private bool _hasGameCard;
+    [ObservableProperty] private string _gameName = "-";
+    [ObservableProperty] private string _gameCover = string.Empty;
+    [ObservableProperty] private string _gameSlogan = "-";
+    [ObservableProperty] private string _gameDesc = "-";
+    [ObservableProperty] private string _gameAccent = string.Empty;
+    [ObservableProperty] private string _gameUrl = "-";
+    [ObservableProperty] private bool _isGameLookupBusy;
+    [ObservableProperty] private string _gameLookupStatus = string.Empty;
+    [ObservableProperty] private bool _hasGameLookupResult;
+    [ObservableProperty] private string _gameLookupName = string.Empty;
+    [ObservableProperty] private string _gameLookupDescription = string.Empty;
+    [ObservableProperty] private string _gameLookupCover = string.Empty;
 
     public MainWindowViewModel()
     {
@@ -60,7 +84,13 @@ public partial class MainWindowViewModel : ObservableObject
         SetReadyMessage();
     }
 
-    partial void OnSelectedRuleChanged(WindowMatchRuleModel? value) => DeleteRuleCommand.NotifyCanExecuteChanged();
+    partial void OnSelectedRuleChanged(WindowMatchRuleModel? value)
+    {
+        DeleteRuleCommand.NotifyCanExecuteChanged();
+        LookupGameCommand.NotifyCanExecuteChanged();
+        ApplyGameLookupCommand.NotifyCanExecuteChanged();
+        ClearGameLookupPreview();
+    }
 
     partial void OnHeartbeatIntervalSecsChanged(int value)
     {
@@ -73,6 +103,14 @@ public partial class MainWindowViewModel : ObservableObject
         IntervalDisplay = $"{HeartbeatIntervalSecs}s";
         _schedulerSnapshot.HeartbeatIntervalSecs = (ulong)HeartbeatIntervalSecs;
     }
+
+    partial void OnIsGameLookupBusyChanged(bool value)
+    {
+        LookupGameCommand.NotifyCanExecuteChanged();
+        ApplyGameLookupCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnHasGameLookupResultChanged(bool value) => ApplyGameLookupCommand.NotifyCanExecuteChanged();
 
     [RelayCommand]
     private void AddRule()
@@ -161,6 +199,122 @@ public partial class MainWindowViewModel : ObservableObject
         LogOutput = "监控已停止";
     }
 
+    [RelayCommand(CanExecute = nameof(CanLookupGame))]
+    private async Task LookupGameAsync()
+    {
+        if (SelectedRule is null)
+        {
+            return;
+        }
+
+        var keyword = string.IsNullOrWhiteSpace(SelectedRule.Game.Name)
+            ? SelectedRule.DisplayName
+            : SelectedRule.Game.Name;
+        if (string.IsNullOrWhiteSpace(keyword))
+        {
+            ShowGameLookupError("请先填写 Game Name 或 Display Name");
+            return;
+        }
+
+        _gameLookupCts?.Cancel();
+        _gameLookupCts?.Dispose();
+        _gameLookupCts = new CancellationTokenSource();
+        var token = _gameLookupCts.Token;
+
+        IsGameLookupBusy = true;
+        HasGameLookupResult = false;
+        GameLookupStatus = "查询中…";
+        _gameLookupPreview = null;
+
+        try
+        {
+            var preview = await _gameLookupService.FetchAsync(BaseUrl, keyword, token);
+            if (token.IsCancellationRequested)
+            {
+                return;
+            }
+
+            if (!preview.Found)
+            {
+                ShowGameLookupError("没有查到匹配的游戏，可以换个更正式的名字试试");
+                return;
+            }
+
+            _gameLookupPreview = preview;
+            GameLookupName = preview.Name;
+            GameLookupDescription = string.IsNullOrWhiteSpace(preview.ShortDescription) ? "暂无简介" : preview.ShortDescription;
+            GameLookupCover = preview.HeaderImage;
+            HasGameLookupResult = true;
+            GameLookupStatus = "查询成功";
+        }
+        catch (OperationCanceledException)
+        {
+            // 被下一次查询或切规则取消。
+        }
+        catch (Exception ex)
+        {
+            ShowGameLookupError(ex.Message);
+        }
+        finally
+        {
+            if (!token.IsCancellationRequested)
+            {
+                IsGameLookupBusy = false;
+            }
+        }
+    }
+
+    private bool CanLookupGame() => SelectedRule is not null && !IsGameLookupBusy;
+
+    [RelayCommand(CanExecute = nameof(CanApplyGameLookup))]
+    private void ApplyGameLookup()
+    {
+        if (SelectedRule is null || _gameLookupPreview is null)
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_gameLookupPreview.Name))
+        {
+            SelectedRule.Game.Name = _gameLookupPreview.Name;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_gameLookupPreview.HeaderImage))
+        {
+            SelectedRule.Game.Cover = _gameLookupPreview.HeaderImage;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_gameLookupPreview.StoreUrl))
+        {
+            SelectedRule.Game.Url = _gameLookupPreview.StoreUrl;
+        }
+    }
+
+    private bool CanApplyGameLookup() => SelectedRule is not null && HasGameLookupResult && !IsGameLookupBusy;
+
+    private void ShowGameLookupError(string message)
+    {
+        _gameLookupPreview = null;
+        HasGameLookupResult = false;
+        GameLookupName = string.Empty;
+        GameLookupDescription = string.Empty;
+        GameLookupCover = string.Empty;
+        GameLookupStatus = message;
+        IsGameLookupBusy = false;
+    }
+
+    private void ClearGameLookupPreview()
+    {
+        _gameLookupCts?.Cancel();
+        _gameLookupPreview = null;
+        HasGameLookupResult = false;
+        IsGameLookupBusy = false;
+        GameLookupStatus = string.Empty;
+        GameLookupName = string.Empty;
+        GameLookupDescription = string.Empty;
+        GameLookupCover = string.Empty;
+    }
+
     private void LoadInitialConfig()
     {
         var loaded = StatusShareNative.LoadPersistedConfig(ConfigPath);
@@ -241,10 +395,8 @@ public partial class MainWindowViewModel : ObservableObject
             MonitorStatus = "运行中";
             ApplyWindow(execution.Window);
             ApplyMedia(execution.Media);
+            ApplyResolved(execution.Resolve);
 
-            ResolvedName = DisplayOrDash(execution.Resolve.Process);
-            ResolvedExtend = DisplayOrDash(execution.Resolve.Extend);
-            MatchedRuleId = DisplayOrDash(execution.Resolve.MatchedRuleId);
             PushReason = TranslateReportReason(execution.Plan.Decision.Reason);
 
             if (execution.ApiResult is not null)
@@ -322,6 +474,25 @@ public partial class MainWindowViewModel : ObservableObject
         MediaArtist = media is null ? "-" : DisplayOrDash(media.Artist);
         MediaThumbnail = media is null ? "-" : DisplayOrDash(media.Thumbnail);
         MediaThumbnailPath = media?.Thumbnail ?? string.Empty;
+        MediaProgressText = FormatMediaProgress(media);
+    }
+
+    private void ApplyResolved(ResolveStatusResultDto resolve)
+    {
+        ResolvedName = DisplayOrDash(resolve.Process);
+        ResolvedExtend = DisplayOrDash(resolve.Extend);
+        ResolvedCategory = string.IsNullOrWhiteSpace(resolve.Category) ? "普通应用" : resolve.Category.Trim();
+        MatchedRuleId = DisplayOrDash(resolve.MatchedRuleId);
+
+        var isGame = string.Equals(resolve.Category, "game", StringComparison.OrdinalIgnoreCase);
+        var game = resolve.Game;
+        HasGameCard = isGame;
+        GameName = DisplayOrDash(string.IsNullOrWhiteSpace(game?.Name) ? resolve.Process : game!.Name);
+        GameCover = game?.Cover ?? string.Empty;
+        GameSlogan = DisplayOrDash(game?.Slogan);
+        GameDesc = DisplayOrDash(game?.Desc);
+        GameAccent = game?.Accent ?? string.Empty;
+        GameUrl = DisplayOrDash(game?.Url);
     }
 
     private static string SummarizeServerSnapshot(ApiCallResultDto result)
@@ -332,7 +503,8 @@ public partial class MainWindowViewModel : ObservableObject
         }
 
         var snapshot = result.Snapshot;
-        return $"{(snapshot.Ok == 1 ? "在线" : "离线")} | {DisplayOrDash(snapshot.Process)}";
+        var category = string.IsNullOrWhiteSpace(snapshot.Category) ? "app" : snapshot.Category.Trim();
+        return $"{(snapshot.Ok == 1 ? "在线" : "离线")} | {DisplayOrDash(snapshot.Process)} | {category}";
     }
 
     private static string TranslateReportReason(ReportReason reason) => reason switch
@@ -344,11 +516,39 @@ public partial class MainWindowViewModel : ObservableObject
         _ => reason.ToString(),
     };
 
+    private static string FormatMediaProgress(MediaInfoDto? media)
+    {
+        if (media is null)
+        {
+            return "-";
+        }
+
+        var state = string.IsNullOrWhiteSpace(media.State) ? "" : media.State.Trim();
+        if (media.Duration > 0)
+        {
+            var progress = $"{FormatClock(media.Position)} / {FormatClock(media.Duration)}";
+            return string.IsNullOrEmpty(state) ? progress : $"{progress} · {state}";
+        }
+
+        return string.IsNullOrEmpty(state) ? "-" : state;
+    }
+
+    private static string FormatClock(double seconds)
+    {
+        if (double.IsNaN(seconds) || double.IsInfinity(seconds) || seconds < 0)
+        {
+            seconds = 0;
+        }
+
+        var value = TimeSpan.FromSeconds(seconds);
+        return value.TotalHours >= 1 ? value.ToString(@"h\:mm\:ss") : value.ToString(@"m\:ss");
+    }
+
     private static string DisplayOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
 
     private void SetReadyMessage()
     {
-        LogOutput = "准备就绪。\n\n建议顺序：\n1. 确认 Base URL 和 gt_ token\n2. 先设置默认名称和默认文案，再补充窗口规则\n3. 点击开始监控，进入自动上报流程";
+        LogOutput = "准备就绪。\n\n建议顺序：\n1. 确认 Base URL 和 gt_ token\n2. 先设置默认名称和默认文案，再补充窗口规则\n3. 游戏规则把 Category 设为 game，并填写卡片字段（可用 Steam 查询预览）\n4. 点击开始监控，进入自动上报流程";
     }
 
     private sealed class MonitorExecutionResult
@@ -362,4 +562,3 @@ public partial class MainWindowViewModel : ObservableObject
         public SchedulerSnapshotDto Snapshot { get; init; } = new();
     }
 }
-

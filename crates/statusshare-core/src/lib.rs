@@ -37,10 +37,13 @@ pub struct MediaInfo {
     pub artist: String,
     pub thumbnail: String,
     /// 当前播放进度（秒），无进度概念时为 0。
+    #[serde(default)]
     pub position: f64,
     /// 媒体总时长（秒），未知时为 0。
+    #[serde(default)]
     pub duration: f64,
     /// 播放状态：playing / paused / stopped，未知时为空字符串。
+    #[serde(default)]
     pub state: String,
 }
 
@@ -82,6 +85,7 @@ pub struct WindowInfo {
 /// 游戏卡片元数据，随规则维护（category = game 时生效）。
 /// 全部字段留空时视为未配置，上报体中会被丢弃。
 #[derive(Debug, Clone, Serialize, Deserialize, Default, uniffi::Record)]
+#[serde(default)]
 pub struct GameMeta {
     /// 游戏标准名：卡片标题 + Steam 搜索关键词。
     /// 留空时前端回退到 process 显示名——显示名可以随便玩梗，搜索词必须正经。
@@ -110,8 +114,10 @@ pub struct WindowMatchRule {
     pub display_name: String,
     pub extend: String,
     /// 活动分类（如 game / music / coding），前端据此渲染特殊卡片；留空表示普通应用。
+    #[serde(default)]
     pub category: String,
     /// category = game 时展示的游戏卡片信息；不玩这个游戏就全部留空。
+    #[serde(default)]
     pub game: GameMeta,
 }
 
@@ -210,7 +216,9 @@ pub struct ResolveStatusResult {
     pub matched_rule_id: String,
     pub process: String,
     pub extend: String,
+    #[serde(default)]
     pub category: String,
+    #[serde(default)]
     pub game: Option<GameMeta>,
     pub media: Option<MediaInfo>,
     pub update: Option<StatusUpdate>,
@@ -222,7 +230,9 @@ pub struct StatusUpdate {
     pub ok: Option<i32>,
     pub process: Option<String>,
     pub extend: Option<String>,
+    #[serde(default)]
     pub category: Option<String>,
+    #[serde(default)]
     pub game: Option<GameMeta>,
     pub media: Option<MediaInfo>,
     pub timestamp: Option<i64>,
@@ -233,7 +243,9 @@ pub struct StatusSnapshot {
     pub ok: i32,
     pub process: String,
     pub extend: String,
+    #[serde(default)]
     pub category: String,
+    #[serde(default)]
     pub game: Option<GameMeta>,
     pub media: Option<MediaInfo>,
     pub timestamp: i64,
