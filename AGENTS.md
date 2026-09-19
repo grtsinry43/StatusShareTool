@@ -77,10 +77,22 @@
   "ok": 1,
   "process": "Coding",
   "extend": "Writing desktop client",
+  "category": "game",
+  "game": {
+    "name": "Stardew Valley",
+    "cover": "https://example.com/game-banner.jpg",
+    "slogan": "一句 slogan",
+    "desc": "一句话描述",
+    "accent": "#5da84f",
+    "url": "https://store.steampowered.com/app/413150/"
+  },
   "media": {
     "title": "Song",
     "artist": "Artist",
-    "thumbnail": "https://example.com/image.jpg"
+    "thumbnail": "https://example.com/image.jpg",
+    "position": 73.5,
+    "duration": 214.0,
+    "state": "playing"
   },
   "timestamp": 1742112000
 }
@@ -101,18 +113,34 @@
   - 类型：`string`
   - 可选
   - 后端会 `TrimSpace`
+- `category`
+  - 类型：`string`
+  - 可选，活动分类（如 `game`），来自命中规则的 `category` 配置
+  - 后端会 `TrimSpace` + 转小写，仅保留 `[a-z0-9-_]` 且最长 32，否则丢弃
+- `game`
+  - 类型：对象，可选，游戏卡片元数据（`category = game` 时展示）
+  - 子字段：`name`（标准名：卡片标题 + Steam 搜索词）/ `cover` / `slogan` / `desc` / `accent` / `url`
+  - 后端仅放行 `http(s)` 的 `cover`/`url`，各字段有长度上限（512/140/280/32/512）
 - `media`
   - 类型：对象，可选
   - 子字段：
     - `title: string`
     - `artist: string`
     - `thumbnail: string`
-  - 三个字段全空时，后端会把整个 `media` 视为 `nil`
+    - `position: number`（秒，可选，负值归零，超过 duration 会被钳制）
+    - `duration: number`（秒，可选，负值归零）
+    - `state: string`（可选，仅 `playing` / `paused` / `stopped` 会被保留）
+  - `title`/`artist`/`thumbnail` 三个字段全空时，后端会把整个 `media` 视为 `nil`
 - `timestamp`
   - 类型：`int64`
   - 可选
   - 必须大于 `0`
   - 省略时后端使用当前 Unix 时间戳
+
+调度约束：
+
+- `media.position` 与 `timestamp` 不参与 core 调度器的变化指纹，
+  进度前进只搭心跳推送的便车，不会触发 Changed 立即推送。
 
 ### 响应 envelope
 
@@ -140,10 +168,14 @@
   "ok": 1,
   "process": "Coding",
   "extend": "Writing desktop client",
+  "category": "game",
   "media": {
     "title": "Song",
     "artist": "Artist",
-    "thumbnail": "https://example.com/image.jpg"
+    "thumbnail": "https://example.com/image.jpg",
+    "position": 73.5,
+    "duration": 214.0,
+    "state": "playing"
   },
   "timestamp": 1742112000,
   "adminPanelOnline": false
@@ -155,6 +187,7 @@
 - `ok: int`
 - `process: string`
 - `extend: string`
+- `category: string`（可能缺失）
 - `media: object | null`
 - `timestamp: int64`
 - `adminPanelOnline: bool`
@@ -227,6 +260,13 @@
   - 命中后上报到后端 `process` 的外显名称
 - `extend`
   - 命中后上报到后端 `extend` 的描述
+- `category`
+  - 可选，命中后上报到后端 `category` 的活动分类
+  - 例如 `game`，前端据此渲染特殊卡片；留空按普通应用展示
+- `game`
+  - 可选，命中后上报到后端 `game` 的游戏卡片元数据（`category = game` 时展示）
+  - 子字段：`name`（标准名：卡片标题 + Steam 搜索词，留空回退 process）/ `cover`（封面横幅 URL）/ `slogan` / `desc` / `accent`（hex 点缀色）/ `url`（跳转链接）
+  - 全部留空视为未配置，上报体会省略该字段
 
 ### 行为语义
 
@@ -263,6 +303,7 @@
 - 后端 `media`
   - 有值就上报对象
   - 没值就上报 `null`
+  - 平台层能拿到时尽量带上 `position` / `duration` / `state`，前端用它们做进度条插值
 
 ### 实现边界
 

@@ -398,6 +398,8 @@ fn resolve_error_result(message: &str) -> ResolveStatusResult {
         matched_rule_id: String::new(),
         process: String::new(),
         extend: String::new(),
+        category: String::new(),
+        game: None,
         media: None,
         update: None,
         error_message: message.to_string(),

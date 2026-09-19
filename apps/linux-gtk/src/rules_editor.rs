@@ -3,10 +3,12 @@ use std::rc::Rc;
 
 use gtk::prelude::*;
 use gtk::{
-    Box as GtkBox, Button, CheckButton, ComboBoxText, Entry, Frame, Label, ListBox, ListBoxRow,
-    Orientation, ScrolledWindow,
+    Box as GtkBox, Button, CheckButton, ComboBoxText, Entry, Frame, Image, Label, ListBox,
+    ListBoxRow, Orientation, ScrolledWindow, Spinner,
 };
-use statusshare_core::{MatchField, MatchKind, ReportPolicy, WindowMatchRule};
+use statusshare_core::{GameMeta, MatchField, MatchKind, ReportPolicy, WindowMatchRule};
+
+use crate::game_lookup::GameLookupPreview;
 
 #[derive(Clone)]
 pub struct RulesEditor {
@@ -22,9 +24,34 @@ pub struct RulesEditor {
     policy_combo: ComboBoxText,
     display_name_entry: Entry,
     extend_entry: Entry,
+    category_combo: ComboBoxText,
+    /// 游戏扩展字段的容器，仅 category = game 时可见。
+    game_fields_box: GtkBox,
+    game_name_entry: Entry,
+    game_cover_entry: Entry,
+    game_slogan_entry: Entry,
+    game_desc_entry: Entry,
+    game_accent_entry: Entry,
+    game_url_entry: Entry,
+    /// Steam 查询预览区
+    lookup_status_label: Label,
+    lookup_spinner: Spinner,
+    lookup_result_box: GtkBox,
+    lookup_cover: Image,
+    lookup_name_label: Label,
+    lookup_desc_label: Label,
+    lookup_apply_button: Button,
+    lookup_button: Button,
+    /// 查询到的结果暂存，供「填入卡片字段」使用。
+    lookup_result: Rc<RefCell<Option<GameLookupPreview>>>,
+    on_game_lookup: Rc<RefCell<Option<Rc<dyn Fn(String)>>>>,
     rules: Rc<RefCell<Vec<WindowMatchRule>>>,
     selected_index: Rc<Cell<Option<usize>>>,
     syncing: Rc<Cell<bool>>,
+    /// 与列表行一一对应的 (标题, 副标题) 标签，用于原地更新而不重建列表。
+    row_labels: Rc<RefCell<Vec<(Label, Label)>>>,
+    /// 配置发生实际编辑（文字/开关/增删）时触发，供外层做自动保存。
+    on_change: Rc<RefCell<Option<Rc<dyn Fn()>>>>,
 }
 
 impl RulesEditor {
@@ -116,6 +143,23 @@ impl RulesEditor {
         let display_name_entry = Entry::builder().hexpand(true).build();
         let extend_entry = Entry::builder().hexpand(true).build();
 
+        let category_combo = ComboBoxText::new();
+        for (id, label) in [
+            ("", "普通应用"),
+            ("game", "游戏 Game"),
+            ("music", "音乐 Music"),
+        ] {
+            category_combo.append(Some(id), label);
+        }
+
+        let game_fields_box = GtkBox::new(Orientation::Vertical, 14);
+        let game_name_entry = Entry::builder().hexpand(true).build();
+        let game_cover_entry = Entry::builder().hexpand(true).build();
+        let game_slogan_entry = Entry::builder().hexpand(true).build();
+        let game_desc_entry = Entry::builder().hexpand(true).build();
+        let game_accent_entry = Entry::builder().hexpand(true).build();
+        let game_url_entry = Entry::builder().hexpand(true).build();
+
         detail_panel.append(&field_block(
             "Rule ID",
             "给规则一个稳定标识，方便后续修改和排查命中结果。",
@@ -161,6 +205,104 @@ impl RulesEditor {
             "命中后上报给后端的 extend 文案，可以写一句说明当前在做什么。",
             &extend_entry,
         ));
+        detail_panel.append(&field_block(
+            "Category",
+            "选「游戏」后，前端会把这条活动渲染成游戏卡片，并展开下面的扩展字段。",
+            &category_combo,
+        ));
+
+        game_fields_box.append(&field_block(
+            "Game Name",
+            "游戏标准名：卡片标题 + Steam 搜索关键词。显示名可以玩梗，这里必须正经，比如 Stardew Valley。",
+            &game_name_entry,
+        ));
+        game_fields_box.append(&field_block(
+            "Game Cover",
+            "游戏卡片封面横幅图 URL，可用 Steam CDN 图或自己的图床。",
+            &game_cover_entry,
+        ));
+        game_fields_box.append(&field_block(
+            "Game Slogan",
+            "游戏卡片上展示的一句 slogan，比如「代码写不动了，就回鹈鹕镇种地」。",
+            &game_slogan_entry,
+        ));
+        game_fields_box.append(&field_block(
+            "Game Desc",
+            "游戏卡片上展示的一句话描述。",
+            &game_desc_entry,
+        ));
+        game_fields_box.append(&field_block(
+            "Game Accent",
+            "游戏卡片点缀色，hex 格式，比如 #5da84f；留空用默认色。",
+            &game_accent_entry,
+        ));
+        game_fields_box.append(&field_block(
+            "Game URL",
+            "点击游戏卡片跳转的链接，比如 Steam 商店页；留空则不可点击。",
+            &game_url_entry,
+        ));
+
+        // Steam 查询预览区
+        let lookup_frame = Frame::new(None);
+        lookup_frame.add_css_class("preview-card");
+        let lookup_box = GtkBox::new(Orientation::Vertical, 8);
+        lookup_box.set_margin_top(12);
+        lookup_box.set_margin_bottom(12);
+        lookup_box.set_margin_start(12);
+        lookup_box.set_margin_end(12);
+
+        let lookup_title = Label::new(Some("Steam 预览"));
+        lookup_title.add_css_class("preview-row-title");
+        lookup_title.set_xalign(0.0);
+        let lookup_hint = Label::new(Some(
+            "用 Game Name（留空则用 Display Name）请求博客服务端的 game-lookup 接口，效果与前台兜底卡片一致。",
+        ));
+        lookup_hint.add_css_class("section-subtitle");
+        lookup_hint.set_wrap(true);
+        lookup_hint.set_xalign(0.0);
+
+        let lookup_action_row = GtkBox::new(Orientation::Horizontal, 8);
+        let lookup_button = Button::with_label("查询 Steam");
+        let lookup_spinner = Spinner::new();
+        let lookup_status_label = Label::new(Some(""));
+        lookup_status_label.add_css_class("section-subtitle");
+        lookup_status_label.set_xalign(0.0);
+        lookup_status_label.set_hexpand(true);
+        lookup_action_row.append(&lookup_button);
+        lookup_action_row.append(&lookup_spinner);
+        lookup_action_row.append(&lookup_status_label);
+
+        let lookup_result_box = GtkBox::new(Orientation::Horizontal, 12);
+        lookup_result_box.set_visible(false);
+        let lookup_cover = Image::new();
+        lookup_cover.set_size_request(138, 64);
+        let lookup_text_box = GtkBox::new(Orientation::Vertical, 4);
+        lookup_text_box.set_valign(gtk::Align::Center);
+        lookup_text_box.set_hexpand(true);
+        let lookup_name_label = Label::new(None);
+        lookup_name_label.add_css_class("preview-title");
+        lookup_name_label.set_xalign(0.0);
+        let lookup_desc_label = Label::new(None);
+        lookup_desc_label.add_css_class("section-subtitle");
+        lookup_desc_label.set_wrap(true);
+        lookup_desc_label.set_xalign(0.0);
+        let lookup_apply_button = Button::with_label("填入卡片字段");
+        lookup_apply_button.set_halign(gtk::Align::Start);
+        lookup_text_box.append(&lookup_name_label);
+        lookup_text_box.append(&lookup_desc_label);
+        lookup_text_box.append(&lookup_apply_button);
+        lookup_result_box.append(&lookup_cover);
+        lookup_result_box.append(&lookup_text_box);
+
+        lookup_box.append(&lookup_title);
+        lookup_box.append(&lookup_hint);
+        lookup_box.append(&lookup_action_row);
+        lookup_box.append(&lookup_result_box);
+        lookup_frame.set_child(Some(&lookup_box));
+        game_fields_box.append(&lookup_frame);
+
+        game_fields_box.set_visible(false);
+        detail_panel.append(&game_fields_box);
 
         root.append(&list_column);
         root.append(&detail_scroll);
@@ -178,9 +320,29 @@ impl RulesEditor {
             policy_combo,
             display_name_entry,
             extend_entry,
+            category_combo,
+            game_fields_box,
+            game_name_entry,
+            game_cover_entry,
+            game_slogan_entry,
+            game_desc_entry,
+            game_accent_entry,
+            game_url_entry,
+            lookup_status_label,
+            lookup_spinner,
+            lookup_result_box,
+            lookup_cover,
+            lookup_name_label,
+            lookup_desc_label,
+            lookup_apply_button,
+            lookup_button,
+            lookup_result: Rc::new(RefCell::new(None)),
+            on_game_lookup: Rc::new(RefCell::new(None)),
             rules,
             selected_index,
             syncing,
+            row_labels: Rc::new(RefCell::new(Vec::new())),
+            on_change: Rc::new(RefCell::new(None)),
         };
 
         editor.connect_signals(add_button, delete_button);
@@ -202,6 +364,93 @@ impl RulesEditor {
         self.refresh_list(selected);
     }
 
+    /// 注册编辑回调：规则内容被实际修改（含增删）时触发。
+    /// 加载配置（set_rules）不会触发。
+    pub fn set_on_change(&self, callback: Rc<dyn Fn()>) {
+        *self.on_change.borrow_mut() = Some(callback);
+    }
+
+    fn emit_change(&self) {
+        if let Some(callback) = self.on_change.borrow().as_ref() {
+            callback();
+        }
+    }
+
+    /// 注册 Steam 查询回调（由 app 注入，负责带 base_url 发起异步请求）。
+    pub fn set_game_lookup_handler(&self, handler: Rc<dyn Fn(String)>) {
+        *self.on_game_lookup.borrow_mut() = Some(handler);
+    }
+
+    fn update_game_fields_visibility(&self, category: &str) {
+        self.game_fields_box.set_visible(category == "game");
+    }
+
+    fn trigger_game_lookup(&self, keyword: String) {
+        if keyword.trim().is_empty() {
+            self.show_game_lookup_error("请先填写 Game Name 或 Display Name".to_string());
+            return;
+        }
+        let Some(handler) = self.on_game_lookup.borrow().as_ref().cloned() else {
+            self.show_game_lookup_error("查询功能未初始化".to_string());
+            return;
+        };
+        self.show_game_lookup_loading();
+        handler(keyword);
+    }
+
+    pub fn show_game_lookup_loading(&self) {
+        *self.lookup_result.borrow_mut() = None;
+        self.lookup_result_box.set_visible(false);
+        self.lookup_status_label.set_text("查询中…");
+        self.lookup_spinner.start();
+    }
+
+    pub fn show_game_lookup_result(&self, preview: GameLookupPreview) {
+        self.lookup_spinner.stop();
+        if !preview.found {
+            *self.lookup_result.borrow_mut() = None;
+            self.lookup_result_box.set_visible(false);
+            self.lookup_status_label
+                .set_text("没有查到匹配的游戏，可以换个更正式的名字试试");
+            return;
+        }
+
+        if let Some(path) = preview.header_image_path.as_ref() {
+            self.lookup_cover.set_from_file(Some(path));
+        } else {
+            self.lookup_cover.set_icon_name(Some("image-x-generic-symbolic"));
+        }
+        self.lookup_name_label.set_text(&preview.name);
+        self.lookup_desc_label.set_text(&preview.short_description);
+        self.lookup_status_label.set_text("查询成功");
+        self.lookup_result_box.set_visible(true);
+        *self.lookup_result.borrow_mut() = Some(preview);
+    }
+
+    pub fn show_game_lookup_error(&self, message: String) {
+        self.lookup_spinner.stop();
+        *self.lookup_result.borrow_mut() = None;
+        self.lookup_result_box.set_visible(false);
+        self.lookup_status_label.set_text(&message);
+    }
+
+    /// 「填入卡片字段」：把查询结果写回 Game Name / Cover / URL 输入框，
+    /// 走输入框的 changed 信号，等价于用户手动输入（会触发规则更新与自动保存）。
+    fn apply_lookup_result(&self) {
+        let Some(preview) = self.lookup_result.borrow().clone() else {
+            return;
+        };
+        if !preview.name.is_empty() {
+            self.game_name_entry.set_text(&preview.name);
+        }
+        if !preview.header_image.is_empty() {
+            self.game_cover_entry.set_text(&preview.header_image);
+        }
+        if !preview.store_url.is_empty() {
+            self.game_url_entry.set_text(&preview.store_url);
+        }
+    }
+
     fn connect_signals(&self, add_button: Button, delete_button: Button) {
         let editor = self.clone();
         add_button.connect_clicked(move |_| {
@@ -217,9 +466,12 @@ impl RulesEditor {
                 report_policy: ReportPolicy::Allow,
                 display_name: String::new(),
                 extend: String::new(),
+                category: String::new(),
+                game: GameMeta::default(),
             });
             drop(rules);
             editor.refresh_list(Some(next_index - 1));
+            editor.emit_change();
         });
 
         let editor = self.clone();
@@ -241,6 +493,7 @@ impl RulesEditor {
             };
             drop(rules);
             editor.refresh_list(next_selection);
+            editor.emit_change();
         });
 
         let editor = self.clone();
@@ -301,6 +554,65 @@ impl RulesEditor {
         self.extend_entry.connect_changed(move |entry| {
             editor.update_selected_rule(|rule| rule.extend = entry.text().to_string());
         });
+
+        let editor = self.clone();
+        self.category_combo.connect_changed(move |combo| {
+            let category = combo.active_id().unwrap_or_default().to_string();
+            editor.update_game_fields_visibility(&category);
+            editor.update_selected_rule(|rule| rule.category = category.clone());
+        });
+
+        let editor = self.clone();
+        self.game_name_entry.connect_changed(move |entry| {
+            editor.update_selected_rule(|rule| rule.game.name = entry.text().to_string());
+        });
+
+        let editor = self.clone();
+        self.game_cover_entry.connect_changed(move |entry| {
+            editor.update_selected_rule(|rule| rule.game.cover = entry.text().to_string());
+        });
+
+        let editor = self.clone();
+        self.game_slogan_entry.connect_changed(move |entry| {
+            editor.update_selected_rule(|rule| rule.game.slogan = entry.text().to_string());
+        });
+
+        let editor = self.clone();
+        self.game_desc_entry.connect_changed(move |entry| {
+            editor.update_selected_rule(|rule| rule.game.desc = entry.text().to_string());
+        });
+
+        let editor = self.clone();
+        self.game_accent_entry.connect_changed(move |entry| {
+            editor.update_selected_rule(|rule| rule.game.accent = entry.text().to_string());
+        });
+
+        let editor = self.clone();
+        self.game_url_entry.connect_changed(move |entry| {
+            editor.update_selected_rule(|rule| rule.game.url = entry.text().to_string());
+        });
+
+        // Steam 查询预览
+        let editor = self.clone();
+        self.lookup_apply_button.connect_clicked(move |_| {
+            editor.apply_lookup_result();
+        });
+
+        let editor = self.clone();
+        let lookup_button = self.lookup_button.clone();
+        let game_name_entry = self.game_name_entry.clone();
+        let display_name_entry = self.display_name_entry.clone();
+        lookup_button.connect_clicked(move |_| {
+            let keyword = {
+                let name = game_name_entry.text().to_string();
+                if name.trim().is_empty() {
+                    display_name_entry.text().to_string()
+                } else {
+                    name
+                }
+            };
+            editor.trigger_game_lookup(keyword);
+        });
     }
 
     fn refresh_list(&self, selected: Option<usize>) {
@@ -308,6 +620,9 @@ impl RulesEditor {
         while let Some(child) = self.list_box.first_child() {
             self.list_box.remove(&child);
         }
+
+        let mut row_labels = self.row_labels.borrow_mut();
+        row_labels.clear();
 
         for rule in self.rules.borrow().iter() {
             let row = ListBoxRow::new();
@@ -332,7 +647,9 @@ impl RulesEditor {
             wrapper.append(&subtitle);
             row.set_child(Some(&wrapper));
             self.list_box.append(&row);
+            row_labels.push((title, subtitle));
         }
+        drop(row_labels);
 
         self.apply_selected_row();
     }
@@ -371,6 +688,19 @@ impl RulesEditor {
                     .set_active_id(Some(report_policy_id(rule.report_policy)));
                 self.display_name_entry.set_text(&rule.display_name);
                 self.extend_entry.set_text(&rule.extend);
+                let category_id = match rule.category.as_str() {
+                    "game" => Some("game"),
+                    "music" => Some("music"),
+                    _ => Some(""),
+                };
+                self.category_combo.set_active_id(category_id);
+                self.update_game_fields_visibility(&rule.category);
+                self.game_name_entry.set_text(&rule.game.name);
+                self.game_cover_entry.set_text(&rule.game.cover);
+                self.game_slogan_entry.set_text(&rule.game.slogan);
+                self.game_desc_entry.set_text(&rule.game.desc);
+                self.game_accent_entry.set_text(&rule.game.accent);
+                self.game_url_entry.set_text(&rule.game.url);
             } else {
                 self.clear_form();
                 self.set_form_sensitive(false);
@@ -400,8 +730,19 @@ impl RulesEditor {
             return;
         };
         update(rule);
+        let title = rule_title(rule);
+        let summary = rule_summary(rule);
         drop(rules);
-        self.refresh_list(Some(index));
+
+        // 只原地更新选中行的文字，不重建列表：
+        // 重建会销毁正在输入的焦点 widget，导致输入一个字符就失焦。
+        if let Some((title_label, subtitle_label)) =
+            self.row_labels.borrow().get(index)
+        {
+            title_label.set_text(&title);
+            subtitle_label.set_text(&summary);
+        }
+        self.emit_change();
     }
 
     fn clear_form(&self) {
@@ -414,6 +755,14 @@ impl RulesEditor {
         self.policy_combo.set_active_id(None);
         self.display_name_entry.set_text("");
         self.extend_entry.set_text("");
+        self.category_combo.set_active_id(Some(""));
+        self.game_fields_box.set_visible(false);
+        self.game_name_entry.set_text("");
+        self.game_cover_entry.set_text("");
+        self.game_slogan_entry.set_text("");
+        self.game_desc_entry.set_text("");
+        self.game_accent_entry.set_text("");
+        self.game_url_entry.set_text("");
     }
 
     fn set_form_sensitive(&self, sensitive: bool) {

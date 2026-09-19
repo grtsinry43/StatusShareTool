@@ -157,14 +157,33 @@ fn media_from_player(player: &mpris::Player) -> Option<MediaInfo> {
         .to_string();
 
     if title.is_empty() && artist.is_empty() && thumbnail.is_empty() {
-        None
-    } else {
-        Some(MediaInfo {
-            title,
-            artist,
-            thumbnail,
-        })
+        return None;
     }
+
+    let duration = metadata
+        .length()
+        .map(|length| length.as_secs_f64())
+        .unwrap_or(0.0);
+    let position = player
+        .get_position()
+        .map(|position| position.as_secs_f64())
+        .unwrap_or(0.0);
+    let state = match player.get_playback_status().ok() {
+        Some(PlaybackStatus::Playing) => "playing",
+        Some(PlaybackStatus::Paused) => "paused",
+        Some(PlaybackStatus::Stopped) => "stopped",
+        None => "",
+    }
+    .to_string();
+
+    Some(MediaInfo {
+        title,
+        artist,
+        thumbnail,
+        position,
+        duration,
+        state,
+    })
 }
 
 fn is_kde_wayland() -> bool {

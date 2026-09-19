@@ -36,6 +36,12 @@ pub struct MediaInfo {
     pub title: String,
     pub artist: String,
     pub thumbnail: String,
+    /// 当前播放进度（秒），无进度概念时为 0。
+    pub position: f64,
+    /// 媒体总时长（秒），未知时为 0。
+    pub duration: f64,
+    /// 播放状态：playing / paused / stopped，未知时为空字符串。
+    pub state: String,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, uniffi::Enum)]
@@ -73,6 +79,25 @@ pub struct WindowInfo {
     pub bundle_id: String,
 }
 
+/// 游戏卡片元数据，随规则维护（category = game 时生效）。
+/// 全部字段留空时视为未配置，上报体中会被丢弃。
+#[derive(Debug, Clone, Serialize, Deserialize, Default, uniffi::Record)]
+pub struct GameMeta {
+    /// 游戏标准名：卡片标题 + Steam 搜索关键词。
+    /// 留空时前端回退到 process 显示名——显示名可以随便玩梗，搜索词必须正经。
+    pub name: String,
+    /// 封面横幅图 URL
+    pub cover: String,
+    /// 手写 slogan
+    pub slogan: String,
+    /// 手写一句话描述
+    pub desc: String,
+    /// 点缀色（hex，如 #5da84f）
+    pub accent: String,
+    /// 点击跳转链接（如 Steam 商店页）
+    pub url: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default, uniffi::Record)]
 pub struct WindowMatchRule {
     pub id: String,
@@ -84,6 +109,10 @@ pub struct WindowMatchRule {
     pub report_policy: ReportPolicy,
     pub display_name: String,
     pub extend: String,
+    /// 活动分类（如 game / music / coding），前端据此渲染特殊卡片；留空表示普通应用。
+    pub category: String,
+    /// category = game 时展示的游戏卡片信息；不玩这个游戏就全部留空。
+    pub game: GameMeta,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
@@ -155,6 +184,8 @@ fn rule(id: &str, pattern: &str, display_name: &str, extend: &str) -> WindowMatc
         report_policy: ReportPolicy::Allow,
         display_name: display_name.to_string(),
         extend: extend.to_string(),
+        category: String::new(),
+        game: GameMeta::default(),
     }
 }
 
@@ -179,6 +210,8 @@ pub struct ResolveStatusResult {
     pub matched_rule_id: String,
     pub process: String,
     pub extend: String,
+    pub category: String,
+    pub game: Option<GameMeta>,
     pub media: Option<MediaInfo>,
     pub update: Option<StatusUpdate>,
     pub error_message: String,
@@ -189,6 +222,8 @@ pub struct StatusUpdate {
     pub ok: Option<i32>,
     pub process: Option<String>,
     pub extend: Option<String>,
+    pub category: Option<String>,
+    pub game: Option<GameMeta>,
     pub media: Option<MediaInfo>,
     pub timestamp: Option<i64>,
 }
@@ -198,6 +233,8 @@ pub struct StatusSnapshot {
     pub ok: i32,
     pub process: String,
     pub extend: String,
+    pub category: String,
+    pub game: Option<GameMeta>,
     pub media: Option<MediaInfo>,
     pub timestamp: i64,
     pub admin_panel_online: bool,
@@ -246,6 +283,10 @@ struct ApiStatusSnapshot {
     #[serde(default)]
     extend: String,
     #[serde(default)]
+    category: String,
+    #[serde(default)]
+    game: Option<GameMeta>,
+    #[serde(default)]
     media: Option<MediaInfo>,
     #[serde(default)]
     timestamp: i64,
@@ -259,6 +300,8 @@ impl From<ApiStatusSnapshot> for StatusSnapshot {
             ok: value.ok,
             process: value.process,
             extend: value.extend,
+            category: value.category,
+            game: value.game,
             media: value.media,
             timestamp: value.timestamp,
             admin_panel_online: value.admin_panel_online,
@@ -275,6 +318,10 @@ struct PushStatusBody {
     #[serde(skip_serializing_if = "Option::is_none")]
     extend: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    category: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    game: Option<GameMeta>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     media: Option<MediaInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
     timestamp: Option<i64>,
@@ -286,6 +333,8 @@ impl From<StatusUpdate> for PushStatusBody {
             ok: value.ok,
             process: value.process.and_then(|v| non_empty(v)),
             extend: value.extend.and_then(|v| non_empty(v)),
+            category: value.category.and_then(|v| non_empty(v)),
+            game: value.game.and_then(clean_game),
             media: value.media.and_then(clean_media),
             timestamp: value.timestamp,
         }
@@ -578,6 +627,8 @@ fn resolve_status_update_inner(
 
         let process = choose_process_name(&rule.display_name, &normalized_window);
         let extend = choose_extend(&rule.extend, &config.default_extend);
+        let category = normalize_category(&rule.category);
+        let game = clean_game(rule.game.clone());
 
         if matches!(rule.report_policy, ReportPolicy::Deny) {
             return ResolveStatusResult {
@@ -585,6 +636,8 @@ fn resolve_status_update_inner(
                 matched_rule_id: rule.id,
                 process,
                 extend,
+                category,
+                game,
                 media,
                 update: None,
                 error_message: String::new(),
@@ -595,6 +648,8 @@ fn resolve_status_update_inner(
             ok: Some(1),
             process: Some(process.clone()),
             extend: non_empty(extend.clone()),
+            category: non_empty(category.clone()),
+            game: game.clone(),
             media: media.clone(),
             timestamp: input.timestamp,
         };
@@ -604,6 +659,8 @@ fn resolve_status_update_inner(
             matched_rule_id: rule.id,
             process,
             extend,
+            category,
+            game,
             media,
             update: Some(update),
             error_message: String::new(),
@@ -619,6 +676,8 @@ fn resolve_status_update_inner(
             matched_rule_id: String::new(),
             process,
             extend,
+            category: String::new(),
+            game: None,
             media,
             update: None,
             error_message: String::new(),
@@ -629,6 +688,8 @@ fn resolve_status_update_inner(
         ok: Some(1),
         process: non_empty(process.clone()),
         extend: non_empty(extend.clone()),
+        category: None,
+        game: None,
         media: media.clone(),
         timestamp: input.timestamp,
     };
@@ -638,6 +699,8 @@ fn resolve_status_update_inner(
         matched_rule_id: String::new(),
         process,
         extend,
+        category: String::new(),
+        game: None,
         media,
         update: Some(update),
         error_message: String::new(),
@@ -824,20 +887,79 @@ fn non_empty(value: String) -> Option<String> {
     }
 }
 
-fn clean_media(media: MediaInfo) -> Option<MediaInfo> {
+pub(crate) fn clean_media(media: MediaInfo) -> Option<MediaInfo> {
     let title = media.title.trim().to_string();
     let artist = media.artist.trim().to_string();
     let thumbnail = media.thumbnail.trim().to_string();
 
     if title.is_empty() && artist.is_empty() && thumbnail.is_empty() {
-        None
-    } else {
-        Some(MediaInfo {
-            title,
-            artist,
-            thumbnail,
-        })
+        return None;
     }
+
+    let mut position = if media.position.is_finite() {
+        media.position.max(0.0)
+    } else {
+        0.0
+    };
+    let duration = if media.duration.is_finite() {
+        media.duration.max(0.0)
+    } else {
+        0.0
+    };
+    if duration > 0.0 && position > duration {
+        position = duration;
+    }
+    let state = match media.state.trim().to_lowercase().as_str() {
+        "playing" => "playing".to_string(),
+        "paused" => "paused".to_string(),
+        "stopped" => "stopped".to_string(),
+        _ => String::new(),
+    };
+
+    Some(MediaInfo {
+        title,
+        artist,
+        thumbnail,
+        position,
+        duration,
+        state,
+    })
+}
+
+fn normalize_category(category: &str) -> String {
+    let trimmed = category.trim().to_lowercase();
+    if trimmed.len() > 32 {
+        return trimmed[..32].to_string();
+    }
+    trimmed
+}
+
+pub(crate) fn clean_game(game: GameMeta) -> Option<GameMeta> {
+    let name = game.name.trim().to_string();
+    let cover = game.cover.trim().to_string();
+    let slogan = game.slogan.trim().to_string();
+    let desc = game.desc.trim().to_string();
+    let accent = game.accent.trim().to_string();
+    let url = game.url.trim().to_string();
+
+    if name.is_empty()
+        && cover.is_empty()
+        && slogan.is_empty()
+        && desc.is_empty()
+        && accent.is_empty()
+        && url.is_empty()
+    {
+        return None;
+    }
+
+    Some(GameMeta {
+        name,
+        cover,
+        slogan,
+        desc,
+        accent,
+        url,
+    })
 }
 
 uniffi::setup_scaffolding!();
@@ -845,8 +967,8 @@ uniffi::setup_scaffolding!();
 #[cfg(test)]
 mod tests {
     use super::{
-        CoreConfig, MatchEngineConfig, MatchField, MatchKind, ReportPolicy, ResolveStatusInput,
-        WindowInfo, WindowMatchRule, build_headers, build_online_status_url,
+        CoreConfig, GameMeta, MatchEngineConfig, MatchField, MatchKind, ReportPolicy,
+        ResolveStatusInput, WindowInfo, WindowMatchRule, build_headers, build_online_status_url,
         resolve_status_update_inner,
     };
     use reqwest::header::AUTHORIZATION;
@@ -907,6 +1029,8 @@ mod tests {
                     report_policy: ReportPolicy::Allow,
                     display_name: "Kitty".to_string(),
                     extend: "没准正在 yay -Syyu，希望不要 grub>".to_string(),
+                    category: String::new(),
+                    game: GameMeta::default(),
                 }],
             },
             ResolveStatusInput {
@@ -943,6 +1067,8 @@ mod tests {
                     report_policy: ReportPolicy::Deny,
                     display_name: String::new(),
                     extend: String::new(),
+                    category: String::new(),
+                    game: GameMeta::default(),
                 }],
             },
             ResolveStatusInput {

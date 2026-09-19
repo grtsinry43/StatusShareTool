@@ -2,7 +2,7 @@ use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{MediaInfo, StatusUpdate};
+use crate::StatusUpdate;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, uniffi::Enum, PartialEq, Eq)]
 pub enum ReportReason {
@@ -97,9 +97,7 @@ pub fn plan_status_update(
         };
     };
 
-    // Exclude timestamp from fingerprint so only content changes trigger a push
-    let fingerprint_data = (&update.ok, &update.process, &update.extend, &update.media);
-    let fingerprint = serde_json::to_string(&fingerprint_data).unwrap_or_default();
+    let fingerprint = status_fingerprint(&update);
     let heartbeat_interval_secs = snapshot.heartbeat_interval_secs as i64;
 
     let decision = if snapshot.last_fingerprint.is_empty() {
@@ -159,9 +157,55 @@ fn normalize_status_update(update: Option<StatusUpdate>) -> Option<StatusUpdate>
         ok: update.ok,
         process: trim_non_empty(update.process),
         extend: trim_non_empty(update.extend),
-        media: update.media.and_then(clean_media),
+        category: trim_non_empty(update.category),
+        game: update.game.and_then(crate::clean_game),
+        media: update.media.and_then(crate::clean_media),
         timestamp: update.timestamp,
     })
+}
+
+/// 计算一次状态更新的指纹，用于判断“内容是否变化”。
+///
+/// 播放进度 (media.position) 与 timestamp 属于高频字段：
+/// 它们每次采样都会变化，但不构成“状态切换”，
+/// 因此不参与指纹，避免进度条导致每秒都触发 Changed 推送；
+/// 进度会搭心跳推送（heartbeat interval）的便车同步到前端。
+fn status_fingerprint(update: &StatusUpdate) -> String {
+    #[derive(Serialize)]
+    struct FingerprintMedia<'a> {
+        title: &'a str,
+        artist: &'a str,
+        thumbnail: &'a str,
+        duration: f64,
+        state: &'a str,
+    }
+
+    #[derive(Serialize)]
+    struct Fingerprint<'a> {
+        ok: Option<i32>,
+        process: &'a str,
+        extend: &'a str,
+        category: &'a str,
+        game: Option<&'a crate::GameMeta>,
+        media: Option<FingerprintMedia<'a>>,
+    }
+
+    let fingerprint = Fingerprint {
+        ok: update.ok,
+        process: update.process.as_deref().unwrap_or_default(),
+        extend: update.extend.as_deref().unwrap_or_default(),
+        category: update.category.as_deref().unwrap_or_default(),
+        game: update.game.as_ref(),
+        media: update.media.as_ref().map(|media| FingerprintMedia {
+            title: &media.title,
+            artist: &media.artist,
+            thumbnail: &media.thumbnail,
+            duration: media.duration,
+            state: &media.state,
+        }),
+    };
+
+    serde_json::to_string(&fingerprint).unwrap_or_default()
 }
 
 fn trim_non_empty(value: Option<String>) -> Option<String> {
@@ -173,21 +217,6 @@ fn trim_non_empty(value: Option<String>) -> Option<String> {
             Some(trimmed)
         }
     })
-}
-
-fn clean_media(media: MediaInfo) -> Option<MediaInfo> {
-    let title = media.title.trim().to_string();
-    let artist = media.artist.trim().to_string();
-    let thumbnail = media.thumbnail.trim().to_string();
-    if title.is_empty() && artist.is_empty() && thumbnail.is_empty() {
-        None
-    } else {
-        Some(MediaInfo {
-            title,
-            artist,
-            thumbnail,
-        })
-    }
 }
 
 #[cfg(test)]
@@ -205,6 +234,8 @@ mod tests {
                 ok: Some(1),
                 process: Some("Kitty".into()),
                 extend: None,
+                category: None,
+                game: None,
                 media: None,
                 timestamp: Some(1),
             }),
@@ -218,6 +249,8 @@ mod tests {
                 ok: Some(1),
                 process: Some("Firefox".into()),
                 extend: None,
+                category: None,
+                game: None,
                 media: None,
                 timestamp: Some(2),
             }),
@@ -234,6 +267,8 @@ mod tests {
                 ok: Some(1),
                 process: Some("Kitty".into()),
                 extend: None,
+                category: None,
+                game: None,
                 media: None,
                 timestamp: Some(1),
             }),
@@ -246,6 +281,8 @@ mod tests {
                 ok: Some(1),
                 process: Some("Kitty".into()),
                 extend: None,
+                category: None,
+                game: None,
                 media: None,
                 timestamp: Some(5),
             }),
@@ -258,6 +295,8 @@ mod tests {
                 ok: Some(1),
                 process: Some("Kitty".into()),
                 extend: None,
+                category: None,
+                game: None,
                 media: None,
                 timestamp: Some(11),
             }),
@@ -280,6 +319,8 @@ mod tests {
                 ok: Some(1),
                 process: Some("Kitty".into()),
                 extend: None,
+                category: None,
+                game: None,
                 media: None,
                 timestamp: Some(1),
             }),
@@ -294,11 +335,77 @@ mod tests {
                 ok: Some(1),
                 process: Some("Kitty".into()),
                 extend: None,
+                category: None,
+                game: None,
                 media: None,
                 timestamp: Some(5),
             }),
             5,
         );
         assert_eq!(second.decision.reason, ReportReason::None);
+    }
+
+    #[test]
+    fn media_progress_does_not_trigger_changed_push() {
+        use crate::MediaInfo;
+
+        let media_at = |position: f64| {
+            Some(MediaInfo {
+                title: "Song".into(),
+                artist: "Artist".into(),
+                thumbnail: String::new(),
+                position,
+                duration: 200.0,
+                state: "playing".into(),
+            })
+        };
+
+        let scheduler = PushScheduler::new(5);
+        let first = scheduler.plan(
+            Some(StatusUpdate {
+                ok: Some(1),
+                process: Some("Spotify".into()),
+                extend: None,
+                category: None,
+                game: None,
+                media: media_at(12.0),
+                timestamp: Some(1),
+            }),
+            1,
+        );
+        assert_eq!(first.reason, ReportReason::Initial);
+        scheduler.mark_pushed(first.fingerprint.clone(), 1);
+
+        // 进度从 12s 走到 13s：不构成状态变化，应等待心跳。
+        let progress_only = scheduler.plan(
+            Some(StatusUpdate {
+                ok: Some(1),
+                process: Some("Spotify".into()),
+                extend: None,
+                category: None,
+                game: None,
+                media: media_at(13.0),
+                timestamp: Some(2),
+            }),
+            2,
+        );
+        assert!(!progress_only.should_push);
+
+        // 同一首歌切到 paused：属于状态变化，立即推送。
+        let mut paused_media = media_at(13.0).expect("media");
+        paused_media.state = "paused".into();
+        let paused = scheduler.plan(
+            Some(StatusUpdate {
+                ok: Some(1),
+                process: Some("Spotify".into()),
+                extend: None,
+                category: None,
+                game: None,
+                media: Some(paused_media),
+                timestamp: Some(3),
+            }),
+            3,
+        );
+        assert_eq!(paused.reason, ReportReason::Changed);
     }
 }

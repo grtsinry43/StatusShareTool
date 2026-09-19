@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::hash_map::DefaultHasher;
 use std::fs;
 use std::hash::{Hash, Hasher};
@@ -24,12 +24,14 @@ use statusshare_core::{
 
 use crate::monitor::{MonitorControl, MonitorTick, start_monitoring};
 use crate::rules_editor::RulesEditor;
+use crate::game_lookup;
 
 #[derive(Clone)]
 enum UiMessage {
     Output(String),
     FetchOutput(String),
     MonitorUpdate(Result<MonitorTick, String>),
+    GameLookupResult(Result<game_lookup::GameLookupPreview, String>),
 }
 
 pub fn run() {
@@ -95,7 +97,6 @@ fn build_ui(app: &Application) {
     let server_buttons = GtkBox::new(Orientation::Horizontal, 8);
     let server_buttons_row1 = GtkBox::new(Orientation::Horizontal, 8);
     let load_button = Button::with_label("Load Config");
-    let save_button = Button::with_label("Save Config");
     let fetch_button = Button::with_label("Fetch Current Server Status");
     let start_button = Button::builder()
         .icon_name("media-playback-start-symbolic")
@@ -105,10 +106,15 @@ fn build_ui(app: &Application) {
         .icon_name("media-playback-stop-symbolic")
         .tooltip_text("Stop Monitor")
         .build();
-    for button in [&load_button, &save_button, &fetch_button] {
+    for button in [&load_button, &fetch_button] {
         button.set_hexpand(true);
         server_buttons_row1.append(button);
     }
+    let autosave_status = Label::new(Some("配置修改后自动保存"));
+    autosave_status.add_css_class("section-subtitle");
+    autosave_status.set_hexpand(true);
+    autosave_status.set_xalign(0.5);
+    server_buttons_row1.append(&autosave_status);
     server_buttons.append(&server_buttons_row1);
 
     let matching_grid = Grid::builder().column_spacing(12).row_spacing(12).build();
@@ -282,12 +288,18 @@ fn build_ui(app: &Application) {
         let home_media_artist_value = home_media_artist_value.clone();
         let home_media_cover = home_media_cover.clone();
 
+        let rules_editor_for_lookup = rules_editor.clone();
+
         glib::timeout_add_local(std::time::Duration::from_millis(200), move || {
             loop {
                 match rx.try_recv() {
                     Ok(UiMessage::Output(text)) | Ok(UiMessage::FetchOutput(text)) => {
                         output_buffer.set_text(&text)
                     }
+                    Ok(UiMessage::GameLookupResult(result)) => match result {
+                        Ok(preview) => rules_editor_for_lookup.show_game_lookup_result(preview),
+                        Err(err) => rules_editor_for_lookup.show_game_lookup_error(err),
+                    },
                     Ok(UiMessage::MonitorUpdate(result)) => match result {
                         Ok(tick) => {
                             monitoring_status_entry.set_text("Running");
@@ -354,7 +366,12 @@ fn build_ui(app: &Application) {
         });
     }
 
-    {
+    // 自动保存：任何配置控件/规则被编辑后，防抖 800ms 写入配置文件。
+    // Load Config 触发的回填通过 suppress 标志屏蔽，避免刚加载又立刻回写。
+    let autosave_pending: Rc<RefCell<Option<glib::SourceId>>> = Rc::new(RefCell::new(None));
+    let autosave_suppress = Rc::new(Cell::new(false));
+
+    let trigger_autosave: Rc<dyn Fn()> = {
         let config_path_entry = config_path_entry.clone();
         let base_url_entry = base_url_entry.clone();
         let token_entry = token_entry.clone();
@@ -363,13 +380,33 @@ fn build_ui(app: &Application) {
         let default_display_entry = default_display_entry.clone();
         let default_extend_entry = default_extend_entry.clone();
         let rules_editor = rules_editor.clone();
-        let output_buffer = output_buffer.clone();
+        let autosave_status = autosave_status.clone();
+        let autosave_pending = autosave_pending.clone();
+        let autosave_suppress = autosave_suppress.clone();
 
-        load_button.connect_clicked(move |_| {
-            let result = load_persisted_config(config_path_entry.text().to_string());
-            if result.success {
-                if let Some(config) = result.config.as_ref() {
-                    apply_persisted_config_to_widgets(
+        Rc::new(move || {
+            if autosave_suppress.get() {
+                return;
+            }
+            if let Some(source) = autosave_pending.borrow_mut().take() {
+                source.remove();
+            }
+
+            let config_path_entry = config_path_entry.clone();
+            let base_url_entry = base_url_entry.clone();
+            let token_entry = token_entry.clone();
+            let interval_spin = interval_spin.clone();
+            let default_report_switch = default_report_switch.clone();
+            let default_display_entry = default_display_entry.clone();
+            let default_extend_entry = default_extend_entry.clone();
+            let rules_editor = rules_editor.clone();
+            let autosave_status = autosave_status.clone();
+            let pending_for_timeout = autosave_pending.clone();
+
+            let source =
+                glib::timeout_add_local_once(std::time::Duration::from_millis(800), move || {
+                    pending_for_timeout.borrow_mut().take();
+                    let result = match collect_persisted_config(
                         &base_url_entry,
                         &token_entry,
                         &interval_spin,
@@ -377,12 +414,62 @@ fn build_ui(app: &Application) {
                         &default_display_entry,
                         &default_extend_entry,
                         &rules_editor,
-                        config,
-                    );
-                }
-            }
-            output_buffer.set_text(&serde_pretty(&result));
-        });
+                    ) {
+                        Ok(config) => {
+                            save_persisted_config(config_path_entry.text().to_string(), config)
+                        }
+                        Err(err) => PersistedConfigResult {
+                            success: false,
+                            path: config_path_entry.text().to_string(),
+                            error_message: err,
+                            config: None,
+                        },
+                    };
+                    if result.success {
+                        let now = glib::DateTime::now_local()
+                            .and_then(|dt| dt.format("%H:%M:%S"))
+                            .map(|s| s.to_string())
+                            .unwrap_or_default();
+                        autosave_status.set_text(&format!("已自动保存 {now}"));
+                    } else {
+                        autosave_status.set_text(&format!("自动保存失败: {}", result.error_message));
+                    }
+                });
+            *autosave_pending.borrow_mut() = Some(source);
+        })
+    };
+
+    for entry in [
+        &base_url_entry,
+        &token_entry,
+        &default_display_entry,
+        &default_extend_entry,
+    ] {
+        let trigger = trigger_autosave.clone();
+        entry.connect_changed(move |_| trigger());
+    }
+    {
+        let trigger = trigger_autosave.clone();
+        interval_spin.connect_value_changed(move |_| trigger());
+    }
+    {
+        let trigger = trigger_autosave.clone();
+        default_report_switch.connect_toggled(move |_| trigger());
+    }
+    rules_editor.set_on_change(trigger_autosave.clone());
+
+    // Steam 查询预览：后台线程请求博客服务端 game-lookup，结果走 UiMessage 回主线程。
+    {
+        let base_url_entry = base_url_entry.clone();
+        let tx = tx.clone();
+        rules_editor.set_game_lookup_handler(Rc::new(move |keyword: String| {
+            let base_url = base_url_entry.text().to_string();
+            let tx = tx.clone();
+            thread::spawn(move || {
+                let result = game_lookup::fetch_game_lookup(&base_url, &keyword);
+                let _ = tx.send(UiMessage::GameLookupResult(result));
+            });
+        }));
     }
 
     {
@@ -395,25 +482,26 @@ fn build_ui(app: &Application) {
         let default_extend_entry = default_extend_entry.clone();
         let rules_editor = rules_editor.clone();
         let output_buffer = output_buffer.clone();
+        let autosave_suppress = autosave_suppress.clone();
 
-        save_button.connect_clicked(move |_| {
-            let result = match collect_persisted_config(
-                &base_url_entry,
-                &token_entry,
-                &interval_spin,
-                &default_report_switch,
-                &default_display_entry,
-                &default_extend_entry,
-                &rules_editor,
-            ) {
-                Ok(config) => save_persisted_config(config_path_entry.text().to_string(), config),
-                Err(err) => PersistedConfigResult {
-                    success: false,
-                    path: config_path_entry.text().to_string(),
-                    error_message: err,
-                    config: None,
-                },
-            };
+        load_button.connect_clicked(move |_| {
+            let result = load_persisted_config(config_path_entry.text().to_string());
+            if result.success {
+                if let Some(config) = result.config.as_ref() {
+                    autosave_suppress.set(true);
+                    apply_persisted_config_to_widgets(
+                        &base_url_entry,
+                        &token_entry,
+                        &interval_spin,
+                        &default_report_switch,
+                        &default_display_entry,
+                        &default_extend_entry,
+                        &rules_editor,
+                        config,
+                    );
+                    autosave_suppress.set(false);
+                }
+            }
             output_buffer.set_text(&serde_pretty(&result));
         });
     }
@@ -1003,7 +1091,7 @@ fn file_uri_to_path(uri: &str) -> Option<PathBuf> {
     Some(PathBuf::from(stripped))
 }
 
-fn cached_thumbnail_path(url: &str) -> Option<PathBuf> {
+pub(crate) fn cached_thumbnail_path(url: &str) -> Option<PathBuf> {
     let cache_dir = std::env::temp_dir().join("statussharetool-media-cache");
     if fs::create_dir_all(&cache_dir).is_err() {
         return None;
