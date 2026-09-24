@@ -1,4 +1,6 @@
 ﻿using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
 using System.Text.Json;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -12,10 +14,13 @@ namespace StatusShare.WindowsApp.ViewModels;
 public partial class MainWindowViewModel : ObservableObject
 {
     private readonly DispatcherTimer _monitorTimer;
+    private readonly DispatcherTimer _autosaveTimer;
+    private readonly HashSet<WindowMatchRuleModel> _hookedRules = new(ReferenceEqualityComparer.Instance);
     private readonly WindowDetectionService _windowDetectionService = new();
     private readonly MediaDetectionService _mediaDetectionService = new();
     private readonly GameLookupService _gameLookupService = new();
     private bool _tickRunning;
+    private bool _suppressAutosave;
     private SchedulerSnapshotDto _schedulerSnapshot = new();
     private CancellationTokenSource? _gameLookupCts;
     private GameLookupPreview? _gameLookupPreview;
@@ -73,11 +78,19 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private string _gameLookupName = string.Empty;
     [ObservableProperty] private string _gameLookupDescription = string.Empty;
     [ObservableProperty] private string _gameLookupCover = string.Empty;
+    [ObservableProperty] private string _autosaveStatus = "配置修改后自动保存";
 
     public MainWindowViewModel()
     {
         _monitorTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _monitorTimer.Tick += async (_, _) => await MonitorTickAsync();
+        _autosaveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(800) };
+        _autosaveTimer.Tick += (_, _) =>
+        {
+            _autosaveTimer.Stop();
+            WriteConfig(updateLog: false);
+        };
+        Rules.CollectionChanged += OnRulesCollectionChanged;
 
         ConfigPath = StatusShareNative.DefaultConfigFilePath();
         LoadInitialConfig();
@@ -102,6 +115,7 @@ public partial class MainWindowViewModel : ObservableObject
 
         IntervalDisplay = $"{HeartbeatIntervalSecs}s";
         _schedulerSnapshot.HeartbeatIntervalSecs = (ulong)HeartbeatIntervalSecs;
+        ScheduleAutosave();
     }
 
     partial void OnIsGameLookupBusyChanged(bool value)
@@ -111,6 +125,12 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     partial void OnHasGameLookupResultChanged(bool value) => ApplyGameLookupCommand.NotifyCanExecuteChanged();
+
+    partial void OnBaseUrlChanged(string value) => ScheduleAutosave();
+    partial void OnTokenChanged(string value) => ScheduleAutosave();
+    partial void OnDefaultReportChanged(bool value) => ScheduleAutosave();
+    partial void OnDefaultDisplayNameChanged(string value) => ScheduleAutosave();
+    partial void OnDefaultExtendChanged(string value) => ScheduleAutosave();
 
     [RelayCommand]
     private void AddRule()
@@ -157,7 +177,22 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void SaveConfig() => LogOutput = BridgeJson.Serialize(StatusShareNative.SavePersistedConfig(ConfigPath, BuildPersistedConfig()));
+    private void SaveConfig()
+    {
+        _autosaveTimer.Stop();
+        WriteConfig(updateLog: true);
+    }
+
+    public void FlushAutosave()
+    {
+        if (!_autosaveTimer.IsEnabled)
+        {
+            return;
+        }
+
+        _autosaveTimer.Stop();
+        WriteConfig(updateLog: false);
+    }
 
     [RelayCommand]
     private async Task FetchServerStatusAsync()
@@ -323,23 +358,126 @@ public partial class MainWindowViewModel : ObservableObject
 
     private void ApplyConfig(PersistedConfigDto config)
     {
-        BaseUrl = config.Core.BaseUrl;
-        Token = config.Core.Token;
-        HeartbeatIntervalSecs = (int)config.Core.HeartbeatIntervalSecs;
-        DefaultReport = config.Matching.DefaultReport;
-        DefaultDisplayName = config.Matching.DefaultDisplayName;
-        DefaultExtend = config.Matching.DefaultExtend;
-
-        Rules.Clear();
-        foreach (var rule in config.Matching.Rules.Select(WindowMatchRuleModel.FromDto))
+        _suppressAutosave = true;
+        _autosaveTimer.Stop();
+        try
         {
-            Rules.Add(rule);
+            BaseUrl = config.Core.BaseUrl;
+            Token = config.Core.Token;
+            HeartbeatIntervalSecs = (int)config.Core.HeartbeatIntervalSecs;
+            DefaultReport = config.Matching.DefaultReport;
+            DefaultDisplayName = config.Matching.DefaultDisplayName;
+            DefaultExtend = config.Matching.DefaultExtend;
+
+            Rules.Clear();
+            foreach (var rule in config.Matching.Rules.Select(WindowMatchRuleModel.FromDto))
+            {
+                Rules.Add(rule);
+            }
+
+            SelectedRule = Rules.FirstOrDefault();
+            _schedulerSnapshot = new SchedulerSnapshotDto { HeartbeatIntervalSecs = (ulong)Math.Max(5, HeartbeatIntervalSecs) };
+            IntervalDisplay = $"{HeartbeatIntervalSecs}s";
+        }
+        finally
+        {
+            _suppressAutosave = false;
+        }
+    }
+
+    private void ScheduleAutosave()
+    {
+        if (_suppressAutosave)
+        {
+            return;
         }
 
-        SelectedRule = Rules.FirstOrDefault();
-        _schedulerSnapshot = new SchedulerSnapshotDto { HeartbeatIntervalSecs = (ulong)Math.Max(5, HeartbeatIntervalSecs) };
-        IntervalDisplay = $"{HeartbeatIntervalSecs}s";
+        _autosaveTimer.Stop();
+        _autosaveTimer.Start();
     }
+
+    private void WriteConfig(bool updateLog)
+    {
+        var result = StatusShareNative.SavePersistedConfig(ConfigPath, BuildPersistedConfig());
+        AutosaveStatus = result.Success
+            ? $"已自动保存 {DateTime.Now:HH:mm:ss}"
+            : $"自动保存失败: {result.ErrorMessage}";
+        if (updateLog)
+        {
+            LogOutput = BridgeJson.Serialize(result);
+        }
+    }
+
+    private void OnRulesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.Action == NotifyCollectionChangedAction.Reset)
+        {
+            foreach (var rule in _hookedRules.ToArray())
+            {
+                UnhookRule(rule);
+            }
+
+            foreach (var rule in Rules)
+            {
+                HookRule(rule);
+            }
+        }
+        else
+        {
+            if (e.OldItems is not null)
+            {
+                foreach (WindowMatchRuleModel rule in e.OldItems)
+                {
+                    UnhookRule(rule);
+                }
+            }
+
+            if (e.NewItems is not null)
+            {
+                foreach (WindowMatchRuleModel rule in e.NewItems)
+                {
+                    HookRule(rule);
+                }
+            }
+        }
+
+        ScheduleAutosave();
+    }
+
+    private void HookRule(WindowMatchRuleModel rule)
+    {
+        if (!_hookedRules.Add(rule))
+        {
+            return;
+        }
+
+        rule.PropertyChanged += OnRulePropertyChanged;
+        rule.Game.PropertyChanged += OnNestedConfigChanged;
+    }
+
+    private void UnhookRule(WindowMatchRuleModel rule)
+    {
+        if (!_hookedRules.Remove(rule))
+        {
+            return;
+        }
+
+        rule.PropertyChanged -= OnRulePropertyChanged;
+        rule.Game.PropertyChanged -= OnNestedConfigChanged;
+    }
+
+    private void OnRulePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (sender is WindowMatchRuleModel rule && e.PropertyName == nameof(WindowMatchRuleModel.Game))
+        {
+            rule.Game.PropertyChanged -= OnNestedConfigChanged;
+            rule.Game.PropertyChanged += OnNestedConfigChanged;
+        }
+
+        ScheduleAutosave();
+    }
+
+    private void OnNestedConfigChanged(object? sender, PropertyChangedEventArgs e) => ScheduleAutosave();
 
     private PersistedConfigDto BuildPersistedConfig() => new()
     {
